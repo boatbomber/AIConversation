@@ -1,0 +1,10 @@
+[package]
+name = "boatbomber/aiconversation"
+description = ""
+version = "0.1.0"
+license = "MPL 2.0"
+authors = ["boatbomber (https://boatbomber.com)"]
+registry = "https://github.com/upliftgames/wally-index"
+realm = "server"
+include = ["src", "src/**", "wally.toml", "wally.lock", "default.project.json"]
+exclude = ["**"]
