@@ -8,7 +8,7 @@ A module for interacting with OpenAI chatbots from Roblox
 local AIConversation = require(script.AIConversation)
 
 local tutorConvo = AIConversation.new({
-	id = "UsageExample",
+    id = "UsageExample",
     key = API_KEY,
     prompt = PROMPT,
 })
