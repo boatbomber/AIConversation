@@ -4,7 +4,14 @@ local HttpService = game:GetService("HttpService")
 
 export type model = "gpt-4" | "gpt-4-32k" | "gpt-3.5-turbo" | "gpt-3.5-turbo-16k"
 
-export type role = "system" | "user" | "assistant"
+export type role = "system" | "user" | "assistant" | "function"
+
+export type functionSchema = {
+	name: string,
+	description: string?,
+	parameters: any,
+	callback: (({[string]: any}) -> any)?,
+}
 
 export type config = {
 	key: string,
@@ -12,11 +19,14 @@ export type config = {
 	id: string,
 	model: model?,
 	temperature: number?,
+	functions: { functionSchema }?,
 }
 
 export type message = {
 	role: role,
 	content: string,
+	name: string?,
+	function_call: {arguments: string, name: string}?,
 }
 
 export type request_options = {
@@ -39,17 +49,25 @@ function AIConversation.new(config: config)
 	conversation._key = config.key
 	conversation._subscriptions = {}
 
+	conversation.token_usage = 0
 	conversation.id = config.id
 	conversation.model = config.model or "gpt-3.5-turbo"
 	conversation.temperature = config.temperature or 0.75
 	conversation.messages = {
 		{ role = "system", content = config.prompt },
 	}
-	conversation.token_usage = 0
+	if config.functions then
+		conversation.functions = config.functions
+		conversation.functions_map = {}
 
-	function conversation:_addMessage(role: role, content: string)
-		local message: message = table.freeze({ role = role, content = content })
-		table.insert(self.messages, message)
+		for _, func in conversation.functions do
+			conversation.functions_map[func.name] = func.callback
+			func.callback = nil
+		end
+	end
+
+	function conversation:_addMessage(message: message)
+		table.insert(self.messages, table.freeze(message))
 
 		for callback in self._subscriptions do
 			task.spawn(callback, message)
@@ -57,7 +75,11 @@ function AIConversation.new(config: config)
 	end
 
 	function conversation:AppendUserMessage(content: string)
-		self:_addMessage("user", content)
+		self:_addMessage({ role = "user", content = content })
+	end
+
+	function conversation:AppendSystemMessage(content: string)
+		self:_addMessage({ role = "system", content = content })
 	end
 
 	function conversation:RequestAppendAIMessage(request_options: request_options)
@@ -75,6 +97,8 @@ function AIConversation.new(config: config)
 				stream = false,
 				-- A list of messages comprising the conversation so far.
 				messages = self.messages,
+				-- A list of functions the model may generate JSON inputs for.
+				functions = self.functions,
 				-- A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
 				user = self.id,
 				-- ID of the model to use.
@@ -98,20 +122,53 @@ function AIConversation.new(config: config)
 		end
 
 		if response.StatusCode ~= 200 then
-			warn("OpenAI responded with error code:", response.StatusCode, response.StatusMessage)
+			warn("OpenAI responded with error code:", response.StatusCode, response.StatusMessage, response.Body)
 			return
 		end
 
 		local decodeSuccess, decodeResponse = pcall(HttpService.JSONDecode, HttpService, response.Body)
 		if not decodeSuccess then
-			warn("Failed to decode OpenAI response body:", response)
+			warn("Failed to decode OpenAI response body:", decodeResponse, response.Body)
 			return
 		end
 
 		self.token_usage = (self.token_usage or 0) + (decodeResponse.usage.total_tokens or 0)
 
 		for _, choice in decodeResponse.choices do
-			self:_addMessage("assistant", choice.message.content)
+			local message = choice.message
+			message.content = message.content or ""
+
+			self:_addMessage(message)
+
+			if message.function_call then
+				local funcName = message.function_call.name
+				local func = self.functions_map[funcName]
+
+				if not func then
+					warn("AI tried to call function", funcName, "but no function exists by that name")
+					continue
+				end
+
+				local decodeArgsSuccess, decodeArgsResponse = pcall(HttpService.JSONDecode, HttpService, message.function_call.arguments)
+				if not decodeArgsSuccess then
+					warn("Failed to decode OpenAI function args", decodeArgsResponse)
+					continue
+				end
+
+				local funcSuccess, funcResponse = pcall(func, decodeArgsResponse)
+				if not funcSuccess then
+					warn("AI called function", funcName, "with args", decodeArgsResponse, "but it errored:", funcResponse)
+					continue
+				end
+
+				-- Add function response to history
+				self:_addMessage({
+					role = "function", name = funcName, content = HttpService:JSONEncode(funcResponse)
+				})
+
+				-- Now that the AI can read the function response, get their final message
+				self:RequestAppendAIMessage(request_options)
+			end
 		end
 	end
 
