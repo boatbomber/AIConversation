@@ -173,7 +173,9 @@ function AIConversation.new(config: config)
 	end
 
 	function conversation:ClearMessages()
-		self.messages = {}
+		self.messages = {
+			{ role = "system", content = config.prompt },
+		}
 		self.token_usage = 0
 	end
 

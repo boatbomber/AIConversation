@@ -166,7 +166,7 @@ Appends a new message from the AI to the conversation, using OpenAI web endpoint
 ```Lua
 function Conversation:ClearMessages()
 ```
-Wipes the messages and sets token_usage to 0.
+Wipes the messages and sets token_usage to 0. Retains the initial system prompt.
 
 ```Lua
 function Conversation:GetMessages(): { message }
