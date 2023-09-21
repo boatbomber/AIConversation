@@ -18,7 +18,6 @@ export type config = {
 	prompt: string,
 	id: string,
 	model: model?,
-	temperature: number?,
 	functions: { functionSchema }?,
 }
 
@@ -31,6 +30,7 @@ export type message = {
 
 export type request_options = {
 	max_tokens: number?,
+	temperature: number?,
 	presence_penalty: number?,
 	frequency_penalty: number?,
 	stop: string? | { string }?,
@@ -52,7 +52,6 @@ function AIConversation.new(config: config)
 	conversation.token_usage = 0
 	conversation.id = config.id
 	conversation.model = config.model or "gpt-3.5-turbo"
-	conversation.temperature = config.temperature or 0.75
 	conversation.messages = {
 		{ role = "system", content = config.prompt },
 	}
@@ -104,9 +103,9 @@ function AIConversation.new(config: config)
 				-- ID of the model to use.
 				model = self.model,
 				-- What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.
-				temperature = self.temperature,
+				temperature = request_options.temperature or 0.7,
 				-- The maximum number of tokens to generate in the chat completion.
-				max_tokens = request_options.max_tokens or 100,
+				max_tokens = request_options.max_tokens or 200,
 				-- Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.
 				presence_penalty = request_options.presence_penalty,
 				-- Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.
