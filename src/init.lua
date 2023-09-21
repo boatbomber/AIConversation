@@ -171,6 +171,40 @@ function AIConversation.new(config: config)
 		end
 	end
 
+	function conversation:DoesTextViolateContentPolicy(text: string)
+		assert(type(text) == "string", "conversation:DoesTextViolateContentPolicy must be called with a string")
+
+		local success, response = pcall(HttpService.RequestAsync, HttpService, {
+			Url = "https://api.openai.com/v1/moderations",
+			Method = "POST",
+			Headers = {
+				["Content-Type"] = "application/json",
+				["Authorization"] = "Bearer " .. self._key,
+			},
+			Body = HttpService:JSONEncode({
+				input = text,
+			}),
+		})
+
+		if not success then
+			warn("Failed to get reply from OpenAI:", response)
+			return false
+		end
+
+		if response.StatusCode ~= 200 then
+			warn("OpenAI responded with error code:", response.StatusCode, response.StatusMessage, response.Body)
+			return false
+		end
+
+		local decodeSuccess, decodeResponse = pcall(HttpService.JSONDecode, HttpService, response.Body)
+		if not decodeSuccess then
+			warn("Failed to decode OpenAI response body:", decodeResponse, response.Body)
+			return false
+		end
+
+		return decodeResponse.results[1].flagged, decodeResponse.results[1]
+	end
+
 	function conversation:ClearMessages()
 		self.messages = {
 			{ role = "system", content = config.prompt },

@@ -164,6 +164,11 @@ function Conversation:RequestAppendAIMessage(request_options: request_options)
 Appends a new message from the AI to the conversation, using OpenAI web endpoints.
 
 ```Lua
+function conversation:DoesTextViolateContentPolicy(text: string)
+```
+Returns whether the text violates OpenAI's content policy, along with the Moderation response.
+
+```Lua
 function Conversation:ClearMessages()
 ```
 Wipes the messages and sets token_usage to 0. Retains the initial system prompt.
