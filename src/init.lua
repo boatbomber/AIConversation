@@ -205,6 +205,43 @@ function AIConversation.new(config: config)
 		return decodeResponse.results[1].flagged, decodeResponse.results[1]
 	end
 
+	function conversation:RequestVectorEmbedding(text: string)
+		assert(type(text) == "string", "conversation:RequestVectorEmbedding must be called with a string")
+
+		local success, response = pcall(HttpService.RequestAsync, HttpService, {
+			Url = "https://api.openai.com/v1/embeddings",
+			Method = "POST",
+			Headers = {
+				["Content-Type"] = "application/json",
+				["Authorization"] = "Bearer " .. self._key,
+			},
+			Body = HttpService:JSONEncode({
+				model = "text-embedding-ada-002",
+				input = text,
+			}),
+		})
+
+		if not success then
+			warn("Failed to get reply from OpenAI:", response)
+			return
+		end
+
+		if response.StatusCode ~= 200 then
+			warn("OpenAI responded with error code:", response.StatusCode, response.StatusMessage, response.Body)
+			return
+		end
+
+		local decodeSuccess, decodeResponse = pcall(HttpService.JSONDecode, HttpService, response.Body)
+		if not decodeSuccess then
+			warn("Failed to decode OpenAI response body:", decodeResponse, response.Body)
+			return
+		end
+
+		self.token_usage = (self.token_usage or 0) + (decodeResponse.usage.total_tokens or 0)
+
+		return decodeResponse.data[1].embedding
+	end
+
 	function conversation:ClearMessages()
 		self.messages = {
 			{ role = "system", content = config.prompt },
