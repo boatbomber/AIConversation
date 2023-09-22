@@ -55,14 +55,19 @@ function AIConversation.new(config: config)
 	conversation.messages = {
 		{ role = "system", content = config.prompt },
 	}
-	if config.functions then
-		conversation.functions = config.functions
+
+	function conversation:SetFunctions(functions: { functionSchema })
+		conversation.functions = functions
 		conversation.functions_map = {}
 
 		for _, func in conversation.functions do
 			conversation.functions_map[func.name] = func.callback
 			func.callback = nil
 		end
+	end
+
+	if config.functions then
+		conversation:SetFunctions(config.functions)
 	end
 
 	function conversation:_addMessage(message: message)

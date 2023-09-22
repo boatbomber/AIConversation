@@ -174,6 +174,11 @@ function conversation:RequestVectorEmbedding(text: string)
 Returns an array of numbers representing a high dimensionality vector embedding of the text.
 
 ```Lua
+function conversation:SetFunctions(functions: { functionSchema })
+```
+Same as passing `functions` in config, but can be done at any time.
+
+```Lua
 function Conversation:ClearMessages()
 ```
 Wipes the messages and sets token_usage to 0. Retains the initial system prompt.
