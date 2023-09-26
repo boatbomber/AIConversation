@@ -73,11 +73,36 @@ type model = "gpt-4" | "gpt-4-32k" | "gpt-3.5-turbo" | "gpt-3.5-turbo-16k"
 
 type role = "system" | "user" | "assistant" | "function"
 
+type moderationCategory =
+	"sexual"
+	| "hate"
+	| "harassment"
+	| "self-harm"
+	| "sexual/minors"
+	| "hate/threatening"
+	| "violence/graphic"
+	| "self-harm/intent"
+	| "self-harm/instructions"
+	| "harassment/threatening"
+	| "violence"
+
+type moderationResult = {
+	flagged: boolean,
+	categories: { [moderationCategory]: boolean },
+	category_scores: { [moderationCategory]: number },
+}
+
 type functionSchema = {
     name: string,
     description: string?,
     parameters: any,
     callback: (({[string]: any}) -> any)?,
+}
+
+type tokenUsage = {
+	prompt_tokens: number?,
+	completion_tokens: number?,
+	total_tokens: number?,
 }
 
 type config = {
@@ -144,32 +169,32 @@ number Conversation.temperature
 What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.
 
 ```Lua
-number Conversation.token_usage
+tokenUsage Conversation.token_usage
 ```
 How many tokens this conversation has used thus far.
 
 ```Lua
-function Conversation:AppendUserMessage(content: string)
+function Conversation:AppendUserMessage(content: string): (boolean, message)
 ```
 Appends a new message to the conversation from the 'user' role.
 
 ```Lua
-function Conversation:AppendSystemMessage(content: string)
+function Conversation:AppendSystemMessage(content: string): (boolean, message)
 ```
 Appends a new message to the conversation from the 'system' role.
 
 ```Lua
-function Conversation:RequestAppendAIMessage(request_options: request_options)
+function Conversation:RequestAppendAIMessage(request_options: request_options): (boolean, string | message)
 ```
 Appends a new message from the AI to the conversation, using OpenAI web endpoints.
 
 ```Lua
-function conversation:DoesTextViolateContentPolicy(text: string)
+function conversation:DoesTextViolateContentPolicy(text: string) : (boolean, string | boolean, moderationResult?)
 ```
 Returns whether the text violates OpenAI's content policy, along with the Moderation response.
 
 ```Lua
-function conversation:RequestVectorEmbedding(text: string)
+function conversation:RequestVectorEmbedding(text: string): (boolean, string | { number })
 ```
 Returns an array of numbers representing a high dimensionality vector embedding of the text.
 
