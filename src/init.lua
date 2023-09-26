@@ -18,6 +18,7 @@ export type moderationCategory =
 	| "self-harm/instructions"
 	| "harassment/threatening"
 	| "violence"
+
 export type moderationResult = {
 	flagged: boolean,
 	categories: { [moderationCategory]: boolean },
@@ -38,7 +39,7 @@ export type functionSchema = {
 	callback: (({ [string]: any }) -> any)?,
 }
 
-type tokenUsage = {
+export type tokenUsage = {
 	prompt_tokens: number?,
 	completion_tokens: number?,
 	total_tokens: number?,
