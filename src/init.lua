@@ -6,11 +6,36 @@ export type model = "gpt-4" | "gpt-4-32k" | "gpt-3.5-turbo" | "gpt-3.5-turbo-16k
 
 export type role = "system" | "user" | "assistant" | "function"
 
+export type moderationCategory =
+	"sexual"
+	| "hate"
+	| "harassment"
+	| "self-harm"
+	| "sexual/minors"
+	| "hate/threatening"
+	| "violence/graphic"
+	| "self-harm/intent"
+	| "self-harm/instructions"
+	| "harassment/threatening"
+	| "violence"
+export type moderationResult = {
+	flagged: boolean,
+	categories: { [moderationCategory]: boolean },
+	category_scores: { [moderationCategory]: number },
+}
+
+export type message = {
+	role: role,
+	content: string,
+	name: string?,
+	function_call: { arguments: string, name: string }?,
+}
+
 export type functionSchema = {
 	name: string,
 	description: string?,
 	parameters: any,
-	callback: (({[string]: any}) -> any)?,
+	callback: (({ [string]: any }) -> any)?,
 }
 
 export type config = {
@@ -19,13 +44,6 @@ export type config = {
 	id: string,
 	model: model?,
 	functions: { functionSchema }?,
-}
-
-export type message = {
-	role: role,
-	content: string,
-	name: string?,
-	function_call: {arguments: string, name: string}?,
 }
 
 export type request_options = {
@@ -78,16 +96,25 @@ function AIConversation.new(config: config)
 		end
 	end
 
-	function conversation:AppendUserMessage(content: string)
-		self:_addMessage({ role = "user", content = content })
+	function conversation:AppendUserMessage(content: string): (boolean, message)
+		local message = { role = "user" :: role, content = content }
+		self:_addMessage(message)
+
+		return true, message
 	end
 
-	function conversation:AppendSystemMessage(content: string)
-		self:_addMessage({ role = "system", content = content })
+	function conversation:AppendSystemMessage(content: string): (boolean, message)
+		local message = { role = "system" :: role, content = content }
+		self:_addMessage(message)
+
+		return true, message
 	end
 
-	function conversation:RequestAppendAIMessage(request_options: request_options)
-		assert(type(request_options) == "table", "conversation:RequestAppendAIMessage must be called with a request_options table")
+	function conversation:RequestAppendAIMessage(request_options: request_options): (boolean, string | message)
+		assert(
+			type(request_options) == "table",
+			"conversation:RequestAppendAIMessage must be called with a request_options table"
+		)
 
 		local success, response = pcall(HttpService.RequestAsync, HttpService, {
 			Url = "https://api.openai.com/v1/chat/completions",
@@ -99,6 +126,8 @@ function AIConversation.new(config: config)
 			Body = HttpService:JSONEncode({
 				-- We can't support streaming with HttpService.
 				stream = false,
+				-- Number of messages to generate
+				n = 1,
 				-- A list of messages comprising the conversation so far.
 				messages = self.messages,
 				-- A list of functions the model may generate JSON inputs for.
@@ -121,62 +150,76 @@ function AIConversation.new(config: config)
 		})
 
 		if not success then
-			warn("Failed to get reply from OpenAI:", response)
-			return
+			return false, "Failed to get reply from OpenAI: " .. tostring(response)
 		end
 
 		if response.StatusCode ~= 200 then
-			warn("OpenAI responded with error code:", response.StatusCode, response.StatusMessage, response.Body)
-			return
+			return false,
+				"OpenAI responded with error code: " .. tostring(response.StatusCode) .. " " .. tostring(
+					response.StatusMessage
+				) .. "\n" .. tostring(response.Body)
 		end
 
 		local decodeSuccess, decodeResponse = pcall(HttpService.JSONDecode, HttpService, response.Body)
 		if not decodeSuccess then
-			warn("Failed to decode OpenAI response body:", decodeResponse, response.Body)
-			return
+			return false,
+				"Failed to decode OpenAI response body: " .. tostring(decodeResponse) .. "\n" .. tostring(response.Body)
 		end
 
 		self.token_usage = (self.token_usage or 0) + (decodeResponse.usage.total_tokens or 0)
 
-		for _, choice in decodeResponse.choices do
-			local message = choice.message
-			message.content = message.content or ""
+		local choice = decodeResponse.choices[1]
+		local message = choice.message
+		message.content = message.content or ""
 
-			self:_addMessage(message)
+		if message.function_call then
+			-- The AI is calling a function
+			local funcName = message.function_call.name
+			local func = self.functions_map[funcName]
 
-			if message.function_call then
-				local funcName = message.function_call.name
-				local func = self.functions_map[funcName]
-
-				if not func then
-					warn("AI tried to call function", funcName, "but no function exists by that name")
-					continue
-				end
-
-				local decodeArgsSuccess, decodeArgsResponse = pcall(HttpService.JSONDecode, HttpService, message.function_call.arguments)
-				if not decodeArgsSuccess then
-					warn("Failed to decode OpenAI function args", decodeArgsResponse)
-					continue
-				end
-
-				local funcSuccess, funcResponse = pcall(func, decodeArgsResponse)
-				if not funcSuccess then
-					warn("AI called function", funcName, "with args", decodeArgsResponse, "but it errored:", funcResponse)
-					continue
-				end
-
-				-- Add function response to history
-				self:_addMessage({
-					role = "function", name = funcName, content = HttpService:JSONEncode(funcResponse)
-				})
-
-				-- Now that the AI can read the function response, get their final message
-				self:RequestAppendAIMessage(request_options)
+			if not func then
+				return false,
+					"AI tried to call function '" .. tostring(funcName) .. "' but no function exists by that name"
 			end
+
+			local decodeArgsSuccess, decodeArgsResponse =
+				pcall(HttpService.JSONDecode, HttpService, message.function_call.arguments)
+			if not decodeArgsSuccess then
+				return false,
+					"Failed to decode OpenAI function args: " .. tostring(decodeArgsResponse) .. "\n" .. tostring(
+						message.function_call.arguments
+					)
+			end
+
+			local funcSuccess, funcResponse = pcall(func, decodeArgsResponse)
+			if not funcSuccess then
+				return false,
+					"AI called function '"
+						.. tostring(funcName)
+						.. "' with args "
+						.. tostring(decodeArgsResponse)
+						.. " but it errored: "
+						.. tostring(funcResponse)
+			end
+
+			-- Add call and response to history
+			self:_addMessage(message)
+			self:_addMessage({
+				role = "function",
+				name = funcName,
+				content = HttpService:JSONEncode(funcResponse),
+			})
+
+			-- Now that the AI can read the function response, get their final message
+			return self:RequestAppendAIMessage(request_options)
+		else
+			-- The AI generated a regular message
+			self:_addMessage(message)
+			return true, message
 		end
 	end
 
-	function conversation:DoesTextViolateContentPolicy(text: string)
+	function conversation:DoesTextViolateContentPolicy(text: string): (boolean, string | boolean, moderationResult?)
 		assert(type(text) == "string", "conversation:DoesTextViolateContentPolicy must be called with a string")
 
 		local success, response = pcall(HttpService.RequestAsync, HttpService, {
@@ -192,25 +235,26 @@ function AIConversation.new(config: config)
 		})
 
 		if not success then
-			warn("Failed to get reply from OpenAI:", response)
-			return false
+			return false, "Failed to get reply from OpenAI: " .. tostring(response)
 		end
 
 		if response.StatusCode ~= 200 then
-			warn("OpenAI responded with error code:", response.StatusCode, response.StatusMessage, response.Body)
-			return false
+			return false,
+				"OpenAI responded with error code: " .. tostring(response.StatusCode) .. tostring(
+					response.StatusMessage
+				) .. "\n" .. tostring(response.Body)
 		end
 
 		local decodeSuccess, decodeResponse = pcall(HttpService.JSONDecode, HttpService, response.Body)
 		if not decodeSuccess then
-			warn("Failed to decode OpenAI response body:", decodeResponse, response.Body)
-			return false
+			return false,
+				"Failed to decode OpenAI response body: " .. tostring(decodeResponse) .. "\n" .. tostring(response.Body)
 		end
 
-		return decodeResponse.results[1].flagged, decodeResponse.results[1]
+		return true, decodeResponse.results[1].flagged, decodeResponse.results[1]
 	end
 
-	function conversation:RequestVectorEmbedding(text: string)
+	function conversation:RequestVectorEmbedding(text: string): (boolean, string | { number })
 		assert(type(text) == "string", "conversation:RequestVectorEmbedding must be called with a string")
 
 		local success, response = pcall(HttpService.RequestAsync, HttpService, {
@@ -227,24 +271,25 @@ function AIConversation.new(config: config)
 		})
 
 		if not success then
-			warn("Failed to get reply from OpenAI:", response)
-			return
+			return false, "Failed to get reply from OpenAI: " .. tostring(response)
 		end
 
 		if response.StatusCode ~= 200 then
-			warn("OpenAI responded with error code:", response.StatusCode, response.StatusMessage, response.Body)
-			return
+			return false,
+				"OpenAI responded with error code: " .. tostring(response.StatusCode) .. tostring(
+					response.StatusMessage
+				) .. "\n" .. tostring(response.Body)
 		end
 
 		local decodeSuccess, decodeResponse = pcall(HttpService.JSONDecode, HttpService, response.Body)
 		if not decodeSuccess then
-			warn("Failed to decode OpenAI response body:", decodeResponse, response.Body)
-			return
+			return false,
+				"Failed to decode OpenAI response body: " .. tostring(decodeResponse) .. "\n" .. tostring(response.Body)
 		end
 
 		self.token_usage = (self.token_usage or 0) + (decodeResponse.usage.total_tokens or 0)
 
-		return decodeResponse.data[1].embedding
+		return true, decodeResponse.data[1].embedding :: { number }
 	end
 
 	function conversation:ClearMessages()
