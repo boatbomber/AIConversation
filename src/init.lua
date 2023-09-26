@@ -45,6 +45,8 @@ export type tokenUsage = {
 	total_tokens: number?,
 }
 
+export type metadata = {[any]: any}
+
 export type config = {
 	key: string,
 	prompt: string,
@@ -84,6 +86,7 @@ function AIConversation.new(config: config)
 	conversation.messages = {
 		{ role = "system", content = config.prompt },
 	}
+	conversation.message_metadata = {}
 
 	function conversation:SetFunctions(functions: { functionSchema })
 		conversation.functions = functions
@@ -108,11 +111,13 @@ function AIConversation.new(config: config)
 		self.token_usage.total_tokens = (self.token_usage.total_tokens or 0) + (tokens.total_tokens or 0)
 	end
 
-	function conversation:_addMessage(message: message)
+	function conversation:_addMessage(message: message, metadata: metadata?)
+		metadata = metadata or {}
 		table.insert(self.messages, table.freeze(message))
+		self.message_metadata[message] = metadata
 
 		for callback in self._subscriptions do
-			task.spawn(callback, message)
+			task.spawn(callback, message, metadata)
 		end
 	end
 
@@ -223,18 +228,24 @@ function AIConversation.new(config: config)
 			end
 
 			-- Add call and response to history
-			self:_addMessage(message)
+			self:_addMessage(message, {
+				id = decodeResponse.id,
+			})
 			self:_addMessage({
 				role = "function",
 				name = funcName,
 				content = HttpService:JSONEncode(funcResponse),
+			}, {
+				id = "func_" .. decodeResponse.id,
 			})
 
 			-- Now that the AI can read the function response, get their final message
 			return self:RequestAppendAIMessage(request_options)
 		else
 			-- The AI generated a regular message
-			self:_addMessage(message)
+			self:_addMessage(message, {
+				id = decodeResponse.id,
+			})
 			return true, message
 		end
 	end
@@ -313,6 +324,7 @@ function AIConversation.new(config: config)
 	end
 
 	function conversation:ClearMessages()
+		self.message_metadata = {}
 		self.messages = {
 			{ role = "system", content = config.prompt },
 		}
@@ -327,7 +339,7 @@ function AIConversation.new(config: config)
 		return table.clone(self.messages)
 	end
 
-	function conversation:SubscribeToNewMessages(callback: (message: message) -> ()): () -> ()
+	function conversation:SubscribeToNewMessages(callback: (message: message, metadata: metadata) -> ()): () -> ()
 		self._subscriptions[callback] = true
 		return function()
 			self._subscriptions[callback] = nil

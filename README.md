@@ -30,7 +30,7 @@ local tutorConvo = AIConversation.new({
     },
 })
 
-tutorConvo:SubscribeToNewMessages(function(message: Conversation.message)
+tutorConvo:SubscribeToNewMessages(function(message: AIConversation.message, metadata: AIConversation.metadata)
     print(message.role .. ":", message.content)
 end)
 
@@ -104,6 +104,8 @@ type tokenUsage = {
 	completion_tokens: number?,
 	total_tokens: number?,
 }
+
+type metadata = {[any]: any}
 
 type config = {
     -- An OpenAI API Key.
@@ -214,6 +216,6 @@ function Conversation:GetMessages(): { message }
 Returns a list of messages comprising the conversation so far.
 
 ```Lua
-function Conversation:SubscribeToNewMessages(callback: (message: message) -> ()): () -> ()
+function Conversation:SubscribeToNewMessages(callback: (message: message, metadata: metadata) -> ()): () -> ()
 ```
 Subscribes the given callback to all new message appends, and returns an unsubscribe function.
