@@ -38,6 +38,12 @@ export type functionSchema = {
 	callback: (({ [string]: any }) -> any)?,
 }
 
+type tokenUsage = {
+	prompt_tokens: number?,
+	completion_tokens: number?,
+	total_tokens: number?,
+}
+
 export type config = {
 	key: string,
 	prompt: string,
@@ -67,7 +73,11 @@ function AIConversation.new(config: config)
 	conversation._key = config.key
 	conversation._subscriptions = {}
 
-	conversation.token_usage = 0
+	conversation.token_usage = {
+		prompt_tokens = 0,
+		completion_tokens = 0,
+		total_tokens = 0,
+	}
 	conversation.id = config.id
 	conversation.model = config.model or "gpt-3.5-turbo"
 	conversation.messages = {
@@ -86,6 +96,15 @@ function AIConversation.new(config: config)
 
 	if config.functions then
 		conversation:SetFunctions(config.functions)
+	end
+
+	function conversation:_addTokens(tokens: tokenUsage)
+		if not tokens then
+			return
+		end
+		self.token_usage.prompt_tokens = (self.token_usage.prompt_tokens or 0) + (tokens.prompt_tokens or 0)
+		self.token_usage.completion_tokens = (self.token_usage.completion_tokens or 0) + (tokens.completion_tokens or 0)
+		self.token_usage.total_tokens = (self.token_usage.total_tokens or 0) + (tokens.total_tokens or 0)
 	end
 
 	function conversation:_addMessage(message: message)
@@ -166,7 +185,7 @@ function AIConversation.new(config: config)
 				"Failed to decode OpenAI response body: " .. tostring(decodeResponse) .. "\n" .. tostring(response.Body)
 		end
 
-		self.token_usage = (self.token_usage or 0) + (decodeResponse.usage.total_tokens or 0)
+		self:_addTokens(decodeResponse.usage)
 
 		local choice = decodeResponse.choices[1]
 		local message = choice.message
@@ -287,7 +306,7 @@ function AIConversation.new(config: config)
 				"Failed to decode OpenAI response body: " .. tostring(decodeResponse) .. "\n" .. tostring(response.Body)
 		end
 
-		self.token_usage = (self.token_usage or 0) + (decodeResponse.usage.total_tokens or 0)
+		self:_addTokens(decodeResponse.usage)
 
 		return true, decodeResponse.data[1].embedding :: { number }
 	end
@@ -296,7 +315,11 @@ function AIConversation.new(config: config)
 		self.messages = {
 			{ role = "system", content = config.prompt },
 		}
-		self.token_usage = 0
+		self.token_usage = {
+			prompt_tokens = 0,
+			completion_tokens = 0,
+			total_tokens = 0,
+		}
 	end
 
 	function conversation:GetMessages(): { message }
