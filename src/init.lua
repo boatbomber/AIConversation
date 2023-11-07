@@ -2,11 +2,17 @@
 
 local HttpService = game:GetService("HttpService")
 
-export type model = "gpt-4" | "gpt-4-32k" | "gpt-3.5-turbo" | "gpt-3.5-turbo-16k"
+export type model =
+	"gpt-4"
+	| "gpt-4-32k"
+	| "gpt-4-1106-preview"
+	| "gpt-3.5-turbo"
+	| "gpt-3.5-turbo-1106"
+	| "gpt-3.5-turbo-16k"
 
-export type role = "system" | "user" | "assistant" | "function"
+export type role = "system" | "user" | "assistant" | "tool"
 
-export type moderationCategory =
+export type moderation_category =
 	"sexual"
 	| "hate"
 	| "harassment"
@@ -19,40 +25,61 @@ export type moderationCategory =
 	| "harassment/threatening"
 	| "violence"
 
-export type moderationResult = {
+export type response_format = {
+	["type"]: "text" | "json",
+}
+
+export type moderation_result = {
 	flagged: boolean,
-	categories: { [moderationCategory]: boolean },
-	category_scores: { [moderationCategory]: number },
+	categories: { [moderation_category]: boolean },
+	category_scores: { [moderation_category]: number },
+}
+
+export type tool_call = {
+	["id"]: string,
+	["type"]: "function",
+	["function"]: {
+		name: string,
+		arguments: string,
+	},
 }
 
 export type message = {
 	role: role,
 	content: string,
+	tool_calls: { tool_call }?,
 	name: string?,
-	function_call: { arguments: string, name: string }?,
+	tool_call_id: string?,
 }
 
-export type functionSchema = {
+export type function_schema = {
 	name: string,
 	description: string?,
 	parameters: any,
 	callback: (({ [string]: any }) -> any)?,
 }
 
-export type tokenUsage = {
+export type tool_schema = {
+	-- Future OpenAI updates may add more supported types but it's just function for now.
+	["type"]: "function",
+	["function"]: function_schema,
+}
+
+export type token_usage = {
 	prompt_tokens: number?,
 	completion_tokens: number?,
 	total_tokens: number?,
 }
 
-export type metadata = {[any]: any}
+export type metadata = { [any]: any }
 
 export type config = {
-	key: string,
-	prompt: string,
 	id: string,
+	key: string,
 	model: model?,
-	functions: { functionSchema }?,
+	prompt: string,
+	response_format: response_format?,
+	tools: { tool_schema }?,
 }
 
 export type request_options = {
@@ -83,26 +110,28 @@ function AIConversation.new(config: config)
 	}
 	conversation.id = config.id
 	conversation.model = config.model or "gpt-3.5-turbo"
+	conversation.response_format = config.response_format or { type = "text" }
 	conversation.messages = {
 		{ role = "system", content = config.prompt },
 	}
 	conversation.message_metadata = {}
 
-	function conversation:SetFunctions(functions: { functionSchema })
-		conversation.functions = functions
-		conversation.functions_map = {}
+	function conversation:SetTools(tools: { tool_schema })
+		conversation.tools = tools
+		conversation.tools_map = {}
 
-		for _, func in conversation.functions do
-			conversation.functions_map[func.name] = func.callback
+		for _, tool in conversation.tools do
+			local func = tool["function"]
+			conversation.tools_map[func.name] = func.callback
 			func.callback = nil
 		end
 	end
 
-	if config.functions then
-		conversation:SetFunctions(config.functions)
+	if config.tools then
+		conversation:SetTools(config.tools)
 	end
 
-	function conversation:_addTokens(tokens: tokenUsage)
+	function conversation:_addTokens(tokens: token_usage)
 		if not tokens then
 			return
 		end
@@ -156,11 +185,13 @@ function AIConversation.new(config: config)
 				-- A list of messages comprising the conversation so far.
 				messages = self.messages,
 				-- A list of functions the model may generate JSON inputs for.
-				functions = self.functions,
+				tools = self.tools,
 				-- A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
 				user = self.id,
 				-- ID of the model to use.
 				model = self.model,
+				-- An object specifying the format that the model must output.
+				response_format = self.response_format,
 				-- What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.
 				temperature = request_options.temperature or 0.7,
 				-- The maximum number of tokens to generate in the chat completion.
@@ -197,60 +228,68 @@ function AIConversation.new(config: config)
 		local message = choice.message
 		message.content = message.content or ""
 
-		if message.function_call then
-			-- The AI is calling a function
-			local funcName = message.function_call.name
-			local func = self.functions_map[funcName]
+		-- Add call to history
+		self:_addMessage(message, {
+			id = decodeResponse.id,
+		})
 
-			if not func then
-				return false,
-					"AI tried to call function '" .. tostring(funcName) .. "' but no function exists by that name"
+		if message.tool_calls then
+			-- Handle each tool call
+			for _, tool_call in message.tool_calls do
+				if tool_call.type ~= "function" then
+					return false,
+						"AI attempted a tool call type '"
+							.. tostring(tool_call.type)
+							.. "', which is not supported yet."
+				end
+
+				local funcName = tool_call["function"].name
+				local func = self.tools_map[funcName]
+
+				if not func then
+					return false,
+						"AI tried to call function '" .. tostring(funcName) .. "' but no function exists by that name"
+				end
+
+				local decodeArgsSuccess, decodeArgsResponse =
+					pcall(HttpService.JSONDecode, HttpService, tool_call["function"].arguments)
+				if not decodeArgsSuccess then
+					return false,
+						"Failed to decode OpenAI function args: " .. tostring(decodeArgsResponse) .. "\n" .. tostring(
+							message.function_call.arguments
+						)
+				end
+
+				local funcSuccess, funcResponse = pcall(func, decodeArgsResponse)
+				if not funcSuccess then
+					return false,
+						"AI called function '"
+							.. tostring(funcName)
+							.. "' with args "
+							.. tostring(decodeArgsResponse)
+							.. " but it errored: "
+							.. tostring(funcResponse)
+				end
+
+				-- Add tool response to history
+				self:_addMessage({
+					tool_call_id = tool_call.id,
+					role = "tool",
+					name = funcName,
+					content = HttpService:JSONEncode(funcResponse),
+				}, {
+					id = "tool_" .. decodeResponse.id,
+				})
 			end
-
-			local decodeArgsSuccess, decodeArgsResponse =
-				pcall(HttpService.JSONDecode, HttpService, message.function_call.arguments)
-			if not decodeArgsSuccess then
-				return false,
-					"Failed to decode OpenAI function args: " .. tostring(decodeArgsResponse) .. "\n" .. tostring(
-						message.function_call.arguments
-					)
-			end
-
-			local funcSuccess, funcResponse = pcall(func, decodeArgsResponse)
-			if not funcSuccess then
-				return false,
-					"AI called function '"
-						.. tostring(funcName)
-						.. "' with args "
-						.. tostring(decodeArgsResponse)
-						.. " but it errored: "
-						.. tostring(funcResponse)
-			end
-
-			-- Add call and response to history
-			self:_addMessage(message, {
-				id = decodeResponse.id,
-			})
-			self:_addMessage({
-				role = "function",
-				name = funcName,
-				content = HttpService:JSONEncode(funcResponse),
-			}, {
-				id = "func_" .. decodeResponse.id,
-			})
 
 			-- Now that the AI can read the function response, get their final message
 			return self:RequestAppendAIMessage(request_options)
-		else
-			-- The AI generated a regular message
-			self:_addMessage(message, {
-				id = decodeResponse.id,
-			})
-			return true, message
 		end
+
+		return true, message
 	end
 
-	function conversation:DoesTextViolateContentPolicy(text: string): (boolean, string | boolean, moderationResult?)
+	function conversation:DoesTextViolateContentPolicy(text: string): (boolean, string | boolean, moderation_result?)
 		assert(type(text) == "string", "conversation:DoesTextViolateContentPolicy must be called with a string")
 
 		local success, response = pcall(HttpService.RequestAsync, HttpService, {
