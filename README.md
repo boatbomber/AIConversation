@@ -1,13 +1,13 @@
 # AI Conversation
 
-A module for interacting with OpenAI chatbots from Roblox
+A module for interacting with LLMs from Roblox
 
 ## Usage Example
 
 ```Lua
 local AIConversation = require(script.AIConversation)
 
-local tutorConvo = AIConversation.OpenAI.new({
+local tutorConvo = AIConversation.OpenAI.new({ -- or AIConversation.TogetherAI.new({
 	id = "UsageExample",
 	key = API_KEY,
 	prompt = PROMPT,
@@ -122,9 +122,9 @@ type token_usage = {
 type metadata = { [any]: any }
 
 type config = {
-	-- A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
+	-- A unique identifier representing your end-user, which can help monitor and detect abuse.
 	id: string,
-	-- An OpenAI API Key.
+	-- An OpenAI/TogetherAI API Key.
 	key: string,
 	-- ID of the AI model to use.
 	model: model?,
@@ -164,7 +164,7 @@ Creates a new Conversation object with the given configuration
 ```Lua
 string Conversation.id
 ```
-A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
+A unique identifier representing your end-user, which can help monitor and detect abuse.
 
 ```Lua
 model Conversation.model
@@ -194,12 +194,12 @@ Appends a new message to the conversation from the 'system' role.
 ```Lua
 function Conversation:RequestAppendAIMessage(request_options: request_options): (boolean, string | message)
 ```
-Appends a new message from the AI to the conversation, using OpenAI web endpoints.
+Appends a new message from the AI to the conversation, using OpenAI/TogetherAI web endpoints.
 
 ```Lua
 function conversation:DoesTextViolateContentPolicy(text: string) : (boolean, string | boolean, moderationResult?)
 ```
-Returns whether the text violates OpenAI's content policy, along with the Moderation response.
+Returns whether the text violates content safety policies, along with the Moderation response.
 
 ```Lua
 function conversation:RequestVectorEmbedding(text: string): (boolean, string | { number })
