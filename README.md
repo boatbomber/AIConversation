@@ -7,7 +7,7 @@ A module for interacting with OpenAI chatbots from Roblox
 ```Lua
 local AIConversation = require(script.AIConversation)
 
-local tutorConvo = AIConversation.new({
+local tutorConvo = AIConversation.OpenAI.new({
 	id = "UsageExample",
 	key = API_KEY,
 	prompt = PROMPT,
@@ -72,28 +72,7 @@ A for loop is used to execute a block of code a specific number of times. Here's
 ### Types
 
 ```Lua
-type model =
-	"gpt-4"
-	| "gpt-4-32k"
-	| "gpt-4-1106-preview"
-	| "gpt-3.5-turbo"
-	| "gpt-3.5-turbo-1106"
-	| "gpt-3.5-turbo-16k"
-
 type role = "system" | "user" | "assistant" | "tool"
-
-type moderation_category =
-	"sexual"
-	| "hate"
-	| "harassment"
-	| "self-harm"
-	| "sexual/minors"
-	| "hate/threatening"
-	| "violence/graphic"
-	| "self-harm/intent"
-	| "self-harm/instructions"
-	| "harassment/threatening"
-	| "violence"
 
 type response_format = {
 	["type"]: "text" | "json",
@@ -130,7 +109,6 @@ type function_schema = {
 }
 
 type tool_schema = {
-	-- Future OpenAI updates may add more supported types but it's just function for now.
 	["type"]: "function",
 	["function"]: function_schema,
 }
@@ -175,7 +153,8 @@ type request_options = {
 -----
 
 ```Lua
-function AIConversation.new(config: config): Conversation
+function AIConversation.OpenAI.new(config: config): Conversation
+function AIConversation.TogetherAI.new(config: config): Conversation
 ```
 
 Creates a new Conversation object with the given configuration
