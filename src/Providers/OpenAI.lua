@@ -145,6 +145,13 @@ function OpenAI._callProvider(
 		end
 	end
 
+	local messages_with_system_prompt: { OpenAIMessage } = table.create(#self._formatted_messages + 1)
+	messages_with_system_prompt[1] = {
+		role = "system",
+		content = self._system_prompt,
+	}
+	table.move(self._formatted_messages, 1, #self._formatted_messages, 2, messages_with_system_prompt)
+
 	local api_response: types.Result<ChatCompletionObject, types.ProviderErrors> = safeRequest({
 		Url = self._url,
 		Method = "POST",
@@ -158,7 +165,7 @@ function OpenAI._callProvider(
 			-- Number of messages to generate
 			n = 1,
 			-- A list of messages comprising the conversation so far.
-			messages = self._formatted_messages,
+			messages = messages_with_system_prompt,
 			-- A list of functions the model may generate JSON inputs for.
 			tools = self:_getToolDefinitions(),
 			-- A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
