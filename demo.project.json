@@ -1,0 +1,18 @@
+{
+  "name": "AIConversationDemo",
+  "tree": {
+    "$className": "DataModel",
+
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+
+      "Demo": {
+        "$path": "demo",
+
+        "AIConversation": {
+          "$path": "src"
+        }
+      }
+    }
+  }
+}

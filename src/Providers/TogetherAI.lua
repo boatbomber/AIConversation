@@ -2,236 +2,144 @@
 
 local HttpService = game:GetService("HttpService")
 
-export type model =
-	"zero-one-ai/Yi-34B-Chat"
-	| "allenai/OLMo-7B-Instruct"
-	| "allenai/OLMo-7B-Twin-2T"
-	| "allenai/OLMo-7B"
-	| "Austism/chronos-hermes-13b"
-	| "cognitivecomputations/dolphin-2.5-mixtral-8x7b"
-	| "databricks/dbrx-instruct"
-	| "deepseek-ai/deepseek-coder-33b-instruct"
-	| "deepseek-ai/deepseek-llm-67b-chat"
-	| "garage-bAInd/Platypus2-70B-instruct"
-	| "google/gemma-2b-it"
-	| "google/gemma-7b-it"
-	| "Gryphe/MythoMax-L2-13b"
-	| "lmsys/vicuna-13b-v1.5"
-	| "lmsys/vicuna-7b-v1.5"
-	| "codellama/CodeLlama-13b-Instruct-hf"
-	| "codellama/CodeLlama-34b-Instruct-hf"
-	| "codellama/CodeLlama-70b-Instruct-hf"
-	| "codellama/CodeLlama-7b-Instruct-hf"
-	| "meta-llama/Llama-2-70b-chat-hf"
-	| "meta-llama/Llama-2-13b-chat-hf"
-	| "meta-llama/Llama-2-7b-chat-hf"
-	| "meta-llama/Llama-3-8b-chat-hf"
-	| "meta-llama/Llama-3-70b-chat-hf"
-	| "microsoft/WizardLM-2-8x22B"
-	| "mistralai/Mistral-7B-Instruct-v0.1"
-	| "mistralai/Mistral-7B-Instruct-v0.2"
-	| "mistralai/Mixtral-8x7B-Instruct-v0.1"
-	| "mistralai/Mixtral-8x22B-Instruct-v0.1"
-	| "NousResearch/Nous-Capybara-7B-V1p9"
-	| "NousResearch/Nous-Hermes-2-Mistral-7B-DPO"
-	| "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO"
-	| "NousResearch/Nous-Hermes-2-Mixtral-8x7B-SFT"
-	| "NousResearch/Nous-Hermes-llama-2-7b"
-	| "NousResearch/Nous-Hermes-Llama2-13b"
-	| "NousResearch/Nous-Hermes-2-Yi-34B"
-	| "openchat/openchat-3.5-1210"
-	| "Open-Orca/Mistral-7B-OpenOrca"
-	| "Qwen/Qwen1.5-0.5B-Chat"
-	| "Qwen/Qwen1.5-1.8B-Chat"
-	| "Qwen/Qwen1.5-4B-Chat"
-	| "Qwen/Qwen1.5-7B-Chat"
-	| "Qwen/Qwen1.5-14B-Chat"
-	| "Qwen/Qwen1.5-32B-Chat"
-	| "Qwen/Qwen1.5-72B-Chat"
-	| "snorkelai/Snorkel-Mistral-PairRM-DPO"
-	| "togethercomputer/alpaca-7b"
-	| "teknium/OpenHermes-2-Mistral-7B"
-	| "teknium/OpenHermes-2p5-Mistral-7B"
-	| "togethercomputer/Llama-2-7B-32K-Instruct"
-	| "togethercomputer/RedPajama-INCITE-Chat-3B-v1"
-	| "togethercomputer/RedPajama-INCITE-7B-Chat"
-	| "togethercomputer/StripedHyena-Nous-7B"
-	| "Undi95/ReMM-SLERP-L2-13B"
-	| "Undi95/Toppy-M-7B"
-	| "WizardLM/WizardLM-13B-V1.2"
-	| "upstage/SOLAR-10.7B-Instruct-v1.0"
+local BaseChat = require(script.Parent.BaseChat)
+local ModelConfigs = require(script.Parent.Parent.ModelConfigs)
+local types = require(script.Parent.Parent.types)
+local safeRequest = require(script.Parent.Parent.Util.safeRequest)
 
-export type role = "system" | "user" | "assistant" | "tool"
-
-export type moderation_category = "self-harm" | "sexual" | "hate/threatening" | "criminal" | "drugs"
-
-export type response_format = {
-	-- Future TogetherAI updates may add more supported types but it's just json_object for now.
-	["type"]: "json_object",
-}
-
-export type moderation_result = {
-	flagged: boolean,
-	categories: { [moderation_category]: boolean },
-	category_scores: { [moderation_category]: number },
-}
-
-export type tool_call = {
-	["id"]: string,
-	["type"]: "function",
+type ToolCall = {
+	id: string,
+	type: "function",
 	["function"]: {
 		name: string,
 		arguments: string,
 	},
 }
-
-export type message = {
-	role: role,
+type TogetherAIUserMessage = {
+	role: "user",
 	content: string,
-	tool_calls: { tool_call }?,
-	name: string?,
-	tool_call_id: string?,
 }
 
-export type function_schema = {
+type TogetherAIAIMessage = {
+	role: "assistant",
+	content: string,
+	tool_calls: nil,
+}
+
+type TogetherAIAIToolCall = {
+	role: "assistant",
+	content: nil,
+	tool_calls: { ToolCall },
+}
+
+type TogetherAISystemMessage = {
+	role: "system",
+	content: string,
+}
+
+type TogetherAIToolMessage = {
+	role: "tool",
+	tool_call_id: string,
 	name: string,
-	description: string?,
-	parameters: any,
-	callback: (({ [string]: any }) -> any)?,
+	content: string,
 }
 
-export type tool_schema = {
-	-- Future TogetherAI updates may add more supported types but it's just function for now.
-	["type"]: "function",
-	["function"]: function_schema,
+type TogetherAIMessage =
+	TogetherAIUserMessage
+	| TogetherAIAIMessage
+	| TogetherAIAIToolCall
+	| TogetherAISystemMessage
+	| TogetherAIToolMessage
+
+type TogetherAIFunctionDeclaration = {
+	type: "function",
+	["function"]: {
+		name: string,
+		description: string,
+		parameters: {
+			type: "object",
+			properties: { [string]: any },
+			required: { string },
+		},
+	},
 }
 
-export type token_usage = {
-	prompt_tokens: number?,
-	completion_tokens: number?,
-	total_tokens: number?,
+type ToolDefinitions = { TogetherAIFunctionDeclaration }
+
+type FinishReason = "stop" | "eos" | "length" | "tool_calls"
+
+type Choice = {
+	finish_reason: FinishReason,
+	index: number,
+	message: TogetherAIAIMessage | TogetherAIAIToolCall,
 }
-
-export type metadata = { [any]: any }
-
-export type config = {
+type ChatCompletionObject = {
 	id: string,
-	key: string,
-	model: model?,
-	prompt: string,
-	response_format: response_format?,
-	tools: { tool_schema }?,
+	object: "chat.completion",
+	created: number,
+	model: string,
+	choices: { Choice },
+	usage: {
+		prompt_tokens: number,
+		completion_tokens: number,
+		total_tokens: number,
+	},
 }
 
-export type request_options = {
-	max_tokens: number?,
-	temperature: number?,
-	presence_penalty: number?,
-	frequency_penalty: number?,
-	stop: string? | { string }?,
+type CompletionObject = {
+	id: string,
+	object: "text_completion",
+	created: number,
+	model: string,
+	choices: { { text: string, finish_reason: FinishReason } },
+	usage: {
+		prompt_tokens: number,
+		completion_tokens: number,
+		total_tokens: number,
+	},
 }
 
-local MODERATION_CATEGORY_MAP: { [string]: moderation_category } = {
-	["01"] = "hate/threatening",
-	["02"] = "sexual",
-	["03"] = "criminal",
-	["05"] = "drugs",
-	["06"] = "self-harm",
+local TogetherAI = {}
+TogetherAI.__index = TogetherAI
+
+type TogetherAIProto = {
+	_url: string,
+	_formatted_messages: { TogetherAIMessage },
+	_filter_cache: { [string]: boolean },
 }
 
-local TogetherAIConversation = {}
-TogetherAIConversation.__index = TogetherAIConversation
+export type TogetherAI = typeof(setmetatable({} :: TogetherAIProto, TogetherAI)) & BaseChat.BaseChat
 
-function TogetherAIConversation.new(config: config)
-	assert(type(config) == "table", "TogetherAIConversation.new must be called with a config table")
-	assert(type(config.key) == "string", "config.key must be an TogetherAI API key string")
-	assert(type(config.prompt) == "string", "config.prompt must be a system prompt string")
-	assert(type(config.id) == "string", "config.id must be an identifying string")
+setmetatable(TogetherAI, BaseChat)
 
-	local conversation = setmetatable({}, TogetherAIConversation)
+function TogetherAI.new(model_id: string, api_key: string): TogetherAI
+	local self = setmetatable(BaseChat.new() :: TogetherAI, TogetherAI)
 
-	conversation._key = config.key
-	conversation._subscriptions = {}
+	self.model_id = model_id
+	self._api_key = api_key
+	self._url = "https://api.together.xyz/v1/chat/completions"
+	self._filter_cache = {}
 
-	conversation.token_usage = {
-		prompt_tokens = 0,
-		completion_tokens = 0,
-		total_tokens = 0,
+	return self
+end
+
+function TogetherAI._callProvider(
+	self: TogetherAI,
+	generation_options: types.GenerationOptions
+): types.Result<types.ProviderResponse, types.ProviderErrors>
+	local messages_with_system_prompt: { TogetherAIMessage } = table.create(#self._formatted_messages + 1)
+	messages_with_system_prompt[1] = {
+		role = "system",
+		content = self._system_prompt,
 	}
-	conversation.id = config.id
-	conversation.model = config.model or "meta-llama/Llama-3-8b-chat-hf"
-	conversation.response_format = config.response_format
-	conversation.prompt = config.prompt
-	conversation.messages = {
-		{ role = "system", content = config.prompt },
-	}
-	conversation.message_metadata = {}
-	conversation.tools = {} :: { tool_schema }
-	conversation.tools_map = {} :: { [string]: (({ [string]: any }) -> any)? }
+	table.move(self._formatted_messages, 1, #self._formatted_messages, 2, messages_with_system_prompt)
 
-	if config.tools then
-		conversation:SetTools(config.tools)
-	end
-
-	return conversation
-end
-
-function TogetherAIConversation:SetTools(tools: { tool_schema })
-	self.tools = tools
-	self.tools_map = {}
-
-	for _, tool in self.tools do
-		local func = tool["function"]
-		self.tools_map[func.name] = func.callback
-		func.callback = nil
-	end
-end
-
-function TogetherAIConversation:_addTokens(tokens: token_usage)
-	if not tokens then
-		return
-	end
-	self.token_usage.prompt_tokens = (self.token_usage.prompt_tokens or 0) + (tokens.prompt_tokens or 0)
-	self.token_usage.completion_tokens = (self.token_usage.completion_tokens or 0) + (tokens.completion_tokens or 0)
-	self.token_usage.total_tokens = (self.token_usage.total_tokens or 0) + (tokens.total_tokens or 0)
-end
-
-function TogetherAIConversation:_addMessage(message: message, metadata: metadata?)
-	metadata = metadata or {}
-	table.insert(self.messages, table.freeze(message))
-	self.message_metadata[message] = metadata
-
-	for callback in self._subscriptions do
-		task.spawn(callback, message, metadata)
-	end
-end
-
-function TogetherAIConversation:AppendUserMessage(content: string): (boolean, message)
-	local message = { role = "user" :: role, content = content }
-	self:_addMessage(message)
-
-	return true, message
-end
-
-function TogetherAIConversation:AppendSystemMessage(content: string): (boolean, message)
-	local message = { role = "system" :: role, content = content }
-	self:_addMessage(message)
-
-	return true, message
-end
-
-function TogetherAIConversation:RequestAppendAIMessage(request_options: request_options): (boolean, string | message)
-	assert(
-		type(request_options) == "table",
-		"TogetherAIConversation:RequestAppendAIMessage must be called with a request_options table"
-	)
-
-	local success, response = pcall(HttpService.RequestAsync, HttpService, {
-		Url = "https://api.together.xyz/v1/chat/completions",
+	local api_response: types.Result<ChatCompletionObject, types.ProviderErrors> = safeRequest({
+		Url = self._url,
 		Method = "POST",
 		Headers = {
 			["Content-Type"] = "application/json",
-			["Authorization"] = "Bearer " .. self._key,
+			["Authorization"] = "Bearer " .. self._api_key,
 		},
 		Body = HttpService:JSONEncode({
 			-- We can't support streaming with HttpService.
@@ -239,285 +147,173 @@ function TogetherAIConversation:RequestAppendAIMessage(request_options: request_
 			-- Number of messages to generate
 			n = 1,
 			-- A list of messages comprising the conversation so far.
-			messages = self.messages,
+			messages = messages_with_system_prompt,
 			-- A list of functions the model may generate JSON inputs for.
-			tools = if #self.tools > 0 then self.tools else nil,
+			tools = self:_getToolDefinitions(),
+			-- A unique identifier representing your end-user, which can help TogetherAI to monitor and detect abuse.
+			user = self.convo_id,
 			-- ID of the model to use.
-			model = self.model,
-			-- An object specifying the format that the model must output.
-			response_format = self.response_format,
+			model = self.model_id,
 			-- What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.
-			temperature = request_options.temperature or 0.7,
+			temperature = generation_options.temperature or 0.9,
 			-- The maximum number of tokens to generate in the chat completion.
-			max_tokens = request_options.max_tokens or 200,
-			-- Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.
-			presence_penalty = request_options.presence_penalty,
-			-- Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.
-			frequency_penalty = request_options.frequency_penalty,
+			max_tokens = generation_options.max_tokens or 2048,
 			-- Up to 4 sequences where the API will stop generating further tokens.
-			stop = request_options.stop,
+			stop = generation_options.stop_sequences,
+			-- The moderation model to guard against policy violations.
+			safety_model = "Meta-Llama/Llama-Guard-7b",
 		}),
 	})
 
-	if not success then
-		return false, "Failed to get reply from TogetherAI: " .. tostring(response)
+	if not api_response.success then
+		return api_response
 	end
 
-	if response.StatusCode ~= 200 then
-		return false,
-			"TogetherAI responded with error code: " .. tostring(response.StatusCode) .. " " .. tostring(
-				response.StatusMessage
-			) .. "\n" .. tostring(response.Body)
+	local chatCompletion = api_response.value
+
+	if not chatCompletion.choices or #chatCompletion.choices == 0 then
+		return {
+			success = false,
+			error = "other",
+			details = "No choices returned",
+		}
 	end
 
-	local decodeSuccess, decodeResponse = pcall(HttpService.JSONDecode, HttpService, response.Body)
-	if not decodeSuccess then
-		return false,
-			"Failed to decode TogetherAI response body: " .. tostring(decodeResponse) .. "\n" .. tostring(response.Body)
+	local candidate = chatCompletion.choices[1]
+
+	local tool_calls = self:_getToolCalls(candidate.message)
+	if not tool_calls.success then
+		return tool_calls
 	end
 
-	self:_addTokens(decodeResponse.usage)
+	return {
+		success = true,
+		value = {
+			id = chatCompletion.id,
+			content = candidate.message.content or "",
+			tool_calls = tool_calls.value,
+			token_usage = {
+				input = chatCompletion.usage.prompt_tokens,
+				output = chatCompletion.usage.completion_tokens,
+			},
+		},
+	}
+end
 
-	local choice = decodeResponse.choices[1]
-	local message = choice.message
-	message.content = message.content or ""
+function TogetherAI._getToolCalls(
+	self: TogetherAI,
+	content: TogetherAIAIMessage | TogetherAIAIToolCall
+): types.Result<{ types.ToolCall }?, types.ProviderErrors>
+	if not content.tool_calls then
+		return {
+			success = true,
+			value = nil,
+		}
+	end
 
-	-- Add call to history
-	self:_addMessage(message, {
-		id = decodeResponse.id,
-	})
-
-	if message.tool_calls then
-		-- Handle each tool call
-		for _, tool_call in message.tool_calls do
-			if tool_call.type ~= "function" then
-				return false,
-					"AI attempted a tool call type '" .. tostring(tool_call.type) .. "', which is not supported yet."
-			end
-
-			local funcName = tool_call["function"].name
-			local func = self.tools_map[funcName]
-
-			if not func then
-				return false,
-					"AI tried to call function '" .. tostring(funcName) .. "' but no function exists by that name"
-			end
-
-			local decodeArgsSuccess, decodeArgsResponse =
-				pcall(HttpService.JSONDecode, HttpService, tool_call["function"].arguments)
-			if not decodeArgsSuccess then
-				return false,
-					"Failed to decode TogetherAI function args: " .. tostring(decodeArgsResponse) .. "\n" .. tostring(
-						message.function_call.arguments
-					)
-			end
-
-			local funcSuccess, funcResponse = pcall(func, decodeArgsResponse)
-			if not funcSuccess then
-				return false,
-					"AI called function '"
-						.. tostring(funcName)
-						.. "' with args "
-						.. tostring(decodeArgsResponse)
-						.. " but it errored: "
-						.. tostring(funcResponse)
-			end
-
-			-- Add tool response to history
-			self:_addMessage({
-				tool_call_id = tool_call.id,
-				role = "tool",
-				name = funcName,
-				content = HttpService:JSONEncode(funcResponse),
-			}, {
-				id = "tool_" .. decodeResponse.id,
-			})
+	local tool_calls = {}
+	for _, tool_call in pairs(content.tool_calls) do
+		local argsSuccess, args = pcall(HttpService.JSONDecode, HttpService, tool_call["function"].arguments)
+		if not argsSuccess then
+			return {
+				success = false,
+				error = "decode_fail",
+				details = args,
+			}
 		end
 
-		-- Now that the AI can read the function response, get their final message
-		return self:RequestAppendAIMessage(request_options)
+		table.insert(tool_calls, {
+			tool_id = tool_call["function"].name,
+			tool_call_id = tool_call.id,
+			args = args,
+		})
 	end
 
-	return true, message
+	if #tool_calls == 0 then
+		return {
+			success = true,
+			value = nil,
+		}
+	end
+	return {
+		success = true,
+		value = tool_calls,
+	}
 end
 
-function TogetherAIConversation:DoesTextViolateContentPolicy(
-	text: string
-): (boolean, string | boolean, moderation_result?)
-	assert(type(text) == "string", "TogetherAIConversation:DoesTextViolateContentPolicy must be called with a string")
-
-	local success, response = pcall(HttpService.RequestAsync, HttpService, {
-		Url = "https://api.together.xyz/completions",
-		Method = "POST",
-		Headers = {
-			["Content-Type"] = "application/json",
-			["Authorization"] = "Bearer " .. self._key,
-		},
-		Body = HttpService:JSONEncode({
-			model = "Meta-Llama/Llama-Guard-7b",
-			stream = false,
-			max_tokens = 30,
-			stop = { "</s>" },
-			prompt = [=[<s>[INST]Task: Check if there is unsafe content in 'user' messages in conversations according our safety policy with the below categories.
-<BEGIN UNSAFE CONTENT CATEGORIES>
-O1: Violence and Hate.
-Should not
-- Help people plan or engage in violence.
-- Encourage people to engage in violence.
-- Express hateful, derogatory, or demeaning sentiments against people based on sensitive personal characteristics like their race, color, religion, national origin, sexual orientation, gender, gender identity, or disability.
-- Encourage discrimination against people based on those characteristics and should not use slurs or create insults based on those characteristics.
-Can
--  Provide information on violence and discrimination.
-- Discuss the topics of hate and violence, and can discuss historical events involving violence.
-O2: Sexual Content.
-Should not
-- Engage in sexually explicit (i.e., erotic) conversations and should not encourage people to engage in sexual activities.
-Can
-- Discuss topics related to sexuality and sexual education.
-- Provide general information regarding sexual activities.
-- Provide guidance on topics related to sexual health.
-O3: Criminal Planning.
-Should not
-- Help people plan or engage in criminal activities like theft, kidnapping, or financial crimes, especially when the person indicates that they may act on the information provided to them.
-- Encourage people to engage in criminal activities or condone criminal behavior.
-Can
-- Help people understand how crimes are committed, provided that the response is not so detailed that it could be used to provide a roadmap for future crimes.
-- Help people understand how systems work that are used to prevent crimes, provided those descriptions do not provide detailed information on how to defeat those systems.
-O4: Guns and Illegal Weapons.
-Should not
-- Assist in the planning or execution of firearm or illegal weapons crimes, especially when the person indicates that they may act on the information provided to them.
-- Encourage people to engage in firearm or illegal weapons crimes or condone such behavior.
-Can
-- Discuss firearms and the arguments for and against firearm ownership.
-O5: Regulated or Controlled Substances.
-Should not
-- Encourage or assist people in the trafficking, consumption, or use of regulated or controlled substances, including but not limited to illegal drugs, tobacco, alcohol, and cannabis.
-- Assist or encourage people to create such substances when it is illegal to do so.
-Can
-- Discuss the use of regulated or controlled substances, and can provide general information on those substances (ex: what their chemical composition is and what their effects are).
-- Provide information on how those substances are manufactured, provided that the information is not so detailed as to provide step-by-step instructions for their creation.
-O6: Self-Harm.
-Should not
-- Encourage people to harm themselves.
-- Romanticize or condone self-harm or suicide.
-- Provide information regarding the methods of suicide or self-harm.
-- Provide any information or advice, other than information regarding appropriate health resources, to people who express or imply that they wish to harm themselves.
-Can
-- Provide general information regarding self-harm and suicide (ex: statistics, the mental health challenges faced by those who take these actions).
-Should
-- Provide information regarding appropriate health resources to people who imply or express the desire to harm themselves.
-<END UNSAFE CONTENT CATEGORIES>
-
-<BEGIN CONVERSATION>
-
-user: ]=]
-				.. text
-				.. [=[
-
-<END CONVERSATION>
-
-Provide your safety assessment for user in the above conversation:
-- First line must read 'safe' or 'unsafe'.
-- If unsafe, a second line must include a comma-separated list of violated categories.[/INST]]=],
-		}),
-	})
-
-	if not success then
-		return false, "Failed to get reply from TogetherAI: " .. tostring(response)
+function TogetherAI._getToolDefinitions(self: TogetherAI): ToolDefinitions?
+	if not next(self._tools) then
+		return nil
 	end
 
-	if response.StatusCode ~= 200 then
-		return false,
-			"TogetherAI responded with error code: " .. tostring(response.StatusCode) .. tostring(
-				response.StatusMessage
-			) .. "\n" .. tostring(response.Body)
+	if not ModelConfigs[self.model_id].tool_support then
+		return nil
 	end
 
-	local decodeSuccess, decodeResponse = pcall(HttpService.JSONDecode, HttpService, response.Body)
-	if not decodeSuccess then
-		return false,
-			"Failed to decode TogetherAI response body: " .. tostring(decodeResponse) .. "\n" .. tostring(response.Body)
+	local tool_definitions = {}
+
+	for tool_id, tool in self._tools do
+		table.insert(tool_definitions, {
+			["type"] = "function" :: "function",
+			["function"] = {
+				name = tool.name,
+				description = tool.description,
+				parameters = tool.args,
+			},
+		})
 	end
 
-	local generated = decodeResponse.choices[1].text
-	local moderation_result = {
-		flagged = false,
-		categories = {} :: { [moderation_category]: boolean },
-		category_scores = {} :: { [moderation_category]: number },
-	}
-	if string.find(generated, "unsafe") then
-		moderation_result.flagged = true
-		for categoryId in string.gmatch(generated, "%d%d") do
-			local category: moderation_category = MODERATION_CATEGORY_MAP[categoryId]
-			if category then
-				moderation_result.categories[category] = true
-				moderation_result.category_scores[category] = 1
+	return tool_definitions
+end
+
+function TogetherAI._formatMessage(self: TogetherAI, message: types.Message): TogetherAIMessage
+	local formattedMessage: TogetherAIMessage
+	if message.role == "user" then
+		formattedMessage = {
+			role = "user",
+			content = message.content,
+		}
+	elseif message.role == "ai" then
+		if message.tool_calls then
+			local tool_calls = {}
+			for _, tool_call in message.tool_calls do
+				table.insert(tool_calls, {
+					id = tool_call.tool_call_id,
+					type = "function",
+					["function"] = {
+						name = tool_call.tool_id,
+						arguments = HttpService:JSONEncode(tool_call.args),
+					},
+				})
 			end
+
+			formattedMessage = (
+				{
+					role = "assistant",
+					content = nil,
+					tool_calls = tool_calls,
+				} :: any
+			) :: TogetherAIAIToolCall
+		else
+			formattedMessage = {
+				role = "assistant",
+				content = message.content,
+			}
 		end
+	elseif message.role == "tool" then
+		formattedMessage = {
+			role = "tool",
+			tool_call_id = message.tool_call_id,
+			name = message.tool_id,
+			content = HttpService:JSONEncode(message.content),
+		}
+	elseif message.role == "system" then
+		formattedMessage = {
+			role = "system",
+			content = message.content,
+		}
 	end
-
-	return true, moderation_result.flagged, moderation_result
+	return formattedMessage
 end
 
-function TogetherAIConversation:RequestVectorEmbedding(text: string): (boolean, string | { number })
-	assert(type(text) == "string", "TogetherAIConversation:RequestVectorEmbedding must be called with a string")
-
-	local success, response = pcall(HttpService.RequestAsync, HttpService, {
-		Url = "https://api.together.xyz/v1/embeddings",
-		Method = "POST",
-		Headers = {
-			["Content-Type"] = "application/json",
-			["Authorization"] = "Bearer " .. self._key,
-		},
-		Body = HttpService:JSONEncode({
-			model = "togethercomputer/m2-bert-80M-8k-retrieval",
-			input = text,
-		}),
-	})
-
-	if not success then
-		return false, "Failed to get reply from TogetherAI: " .. tostring(response)
-	end
-
-	if response.StatusCode ~= 200 then
-		return false,
-			"TogetherAI responded with error code: " .. tostring(response.StatusCode) .. tostring(
-				response.StatusMessage
-			) .. "\n" .. tostring(response.Body)
-	end
-
-	local decodeSuccess, decodeResponse = pcall(HttpService.JSONDecode, HttpService, response.Body)
-	if not decodeSuccess then
-		return false,
-			"Failed to decode TogetherAI response body: " .. tostring(decodeResponse) .. "\n" .. tostring(response.Body)
-	end
-
-	self:_addTokens(decodeResponse.usage)
-
-	return true, decodeResponse.data[1].embedding :: { number }
-end
-
-function TogetherAIConversation:ClearMessages()
-	self.message_metadata = {}
-	self.messages = {
-		{ role = "system", content = self.prompt },
-	}
-	self.token_usage = {
-		prompt_tokens = 0,
-		completion_tokens = 0,
-		total_tokens = 0,
-	}
-end
-
-function TogetherAIConversation:GetMessages(): { message }
-	return table.clone(self.messages)
-end
-
-function TogetherAIConversation:SubscribeToNewMessages(callback: (message: message, metadata: metadata) -> ()): () -> ()
-	self._subscriptions[callback] = true
-	return function()
-		self._subscriptions[callback] = nil
-	end
-end
-
-return TogetherAIConversation
+return TogetherAI

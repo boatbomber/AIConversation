@@ -10,3 +10,5 @@
 
 # VS Code files
 .vscode/*
+
+demo/secrets*

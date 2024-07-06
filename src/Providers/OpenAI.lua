@@ -2,25 +2,51 @@
 
 local HttpService = game:GetService("HttpService")
 
-export type model =
-	"gpt-4-turbo"
-	| "gpt-4-turbo-2024-04-09"
-	| "gpt-4-turbo-preview"
-	| "gpt-4-0125-preview"
-	| "gpt-4-1106-preview"
-	| "gpt-4-vision-preview"
-	| "gpt-4-1106-vision-preview"
-	| "gpt-4"
-	| "gpt-4-0613"
-	| "gpt-4-32k"
-	| "gpt-4-32k-0613"
-	| "gpt-3.5-turbo"
-	| "gpt-3.5-turbo-0125"
-	| "gpt-3.5-turbo-1106"
+local BaseChat = require(script.Parent.BaseChat)
+local ModelConfigs = require(script.Parent.Parent.ModelConfigs)
+local types = require(script.Parent.Parent.types)
+local safeRequest = require(script.Parent.Parent.Util.safeRequest)
 
-export type role = "system" | "user" | "assistant" | "tool"
+type ToolCall = {
+	id: string,
+	type: "function",
+	["function"]: {
+		name: string,
+		arguments: string,
+	},
+}
+type OpenAIUserMessage = {
+	role: "user",
+	content: string,
+}
 
-export type moderation_category =
+type OpenAIAIMessage = {
+	role: "assistant",
+	content: string,
+	tool_calls: nil,
+}
+
+type OpenAIAIToolCall = {
+	role: "assistant",
+	content: nil,
+	tool_calls: { ToolCall },
+}
+
+type OpenAISystemMessage = {
+	role: "system",
+	content: string,
+}
+
+type OpenAIToolMessage = {
+	role: "tool",
+	tool_call_id: string,
+	name: string,
+	content: string,
+}
+
+type OpenAIMessage = OpenAIUserMessage | OpenAIAIMessage | OpenAIAIToolCall | OpenAISystemMessage | OpenAIToolMessage
+
+type ModerationCategory =
 	"sexual"
 	| "hate"
 	| "harassment"
@@ -33,164 +59,105 @@ export type moderation_category =
 	| "harassment/threatening"
 	| "violence"
 
-export type response_format = {
-	["type"]: "text" | "json",
-}
-
-export type moderation_result = {
-	flagged: boolean,
-	categories: { [moderation_category]: boolean },
-	category_scores: { [moderation_category]: number },
-}
-
-export type tool_call = {
-	["id"]: string,
-	["type"]: "function",
-	["function"]: {
-		name: string,
-		arguments: string,
+type ModerationResult = {
+	id: string,
+	model: string,
+	results: {
+		{
+			flagged: boolean,
+			categories: { [ModerationCategory]: boolean },
+			category_scores: { [ModerationCategory]: number },
+		}
 	},
 }
 
-export type message = {
-	role: role,
-	content: string,
-	tool_calls: { tool_call }?,
-	name: string?,
-	tool_call_id: string?,
+type OpenAIFunctionDeclaration = {
+	type: "function",
+	["function"]: {
+		name: string,
+		description: string,
+		parameters: {
+			type: "object",
+			properties: { [string]: any },
+			required: { string },
+		},
+	},
 }
 
-export type function_schema = {
-	name: string,
-	description: string?,
-	parameters: any,
-	callback: (({ [string]: any }) -> any)?,
+type ToolDefinitions = { OpenAIFunctionDeclaration }
+
+type FinishReason = "stop" | "length" | "content_filter" | "tool_calls" | "function_call"
+
+type Choice = {
+	finish_reason: FinishReason,
+	index: number,
+	message: OpenAIAIMessage | OpenAIAIToolCall,
 }
-
-export type tool_schema = {
-	-- Future OpenAI updates may add more supported types but it's just function for now.
-	["type"]: "function",
-	["function"]: function_schema,
-}
-
-export type token_usage = {
-	prompt_tokens: number?,
-	completion_tokens: number?,
-	total_tokens: number?,
-}
-
-export type metadata = { [any]: any }
-
-export type config = {
+type ChatCompletionObject = {
 	id: string,
-	key: string,
-	model: model?,
-	prompt: string,
-	response_format: response_format?,
-	tools: { tool_schema }?,
+	object: "chat.completion",
+	created: number,
+	model: string,
+	choices: { Choice },
+	usage: {
+		prompt_tokens: number,
+		completion_tokens: number,
+		total_tokens: number,
+	},
 }
 
-export type request_options = {
-	max_tokens: number?,
-	temperature: number?,
-	presence_penalty: number?,
-	frequency_penalty: number?,
-	stop: string? | { string }?,
+local OpenAI = {}
+OpenAI.__index = OpenAI
+
+type OpenAIProto = {
+	_url: string,
+	_formatted_messages: { OpenAIMessage },
+	_filter_cache: { [string]: boolean },
 }
 
-local OpenAIConversation = {}
-OpenAIConversation.__index = OpenAIConversation
+export type OpenAI = typeof(setmetatable({} :: OpenAIProto, OpenAI)) & BaseChat.BaseChat
 
-function OpenAIConversation.new(config: config)
-	assert(type(config) == "table", "AIConversation.new must be called with a config table")
-	assert(type(config.key) == "string", "config.key must be an OpenAI API key string")
-	assert(type(config.prompt) == "string", "config.prompt must be a system prompt string")
-	assert(type(config.id) == "string", "config.id must be an identifying string")
+setmetatable(OpenAI, BaseChat)
 
-	local conversation = setmetatable({}, OpenAIConversation)
+function OpenAI.new(model_id: string, api_key: string): OpenAI
+	local self = setmetatable(BaseChat.new() :: OpenAI, OpenAI)
 
-	conversation._key = config.key
-	conversation._subscriptions = {}
+	self.model_id = model_id
+	self._api_key = api_key
+	self._url = "https://api.openai.com/v1/chat/completions"
+	self._filter_cache = {}
 
-	conversation.token_usage = {
-		prompt_tokens = 0,
-		completion_tokens = 0,
-		total_tokens = 0,
+	return self
+end
+
+function OpenAI._callProvider(
+	self: OpenAI,
+	generation_options: types.GenerationOptions
+): types.Result<types.ProviderResponse, types.ProviderErrors>
+	local user_message = self:_getLastUserMessage()
+	if user_message then
+		local filtered = self:_isMessageFiltered(user_message)
+		if filtered.success and filtered.value then
+			return {
+				success = false,
+				error = "safety_filter",
+			}
+		end
+	end
+
+	local messages_with_system_prompt: { OpenAIMessage } = table.create(#self._formatted_messages + 1)
+	messages_with_system_prompt[1] = {
+		role = "system",
+		content = self._system_prompt,
 	}
-	conversation.id = config.id
-	conversation.model = config.model or "gpt-3.5-turbo"
-	conversation.response_format = config.response_format or { type = "text" }
-	conversation.prompt = config.prompt
-	conversation.messages = {
-		{ role = "system", content = config.prompt },
-	}
-	conversation.message_metadata = {}
-	conversation.tools = {} :: { tool_schema }
-	conversation.tools_map = {} :: { [string]: (({ [string]: any }) -> any)? }
+	table.move(self._formatted_messages, 1, #self._formatted_messages, 2, messages_with_system_prompt)
 
-	if config.tools then
-		conversation:SetTools(config.tools)
-	end
-
-	return conversation
-end
-
-function OpenAIConversation:SetTools(tools: { tool_schema })
-	self.tools = tools
-	self.tools_map = {}
-
-	for _, tool in self.tools do
-		local func = tool["function"]
-		self.tools_map[func.name] = func.callback
-		func.callback = nil
-	end
-end
-
-function OpenAIConversation:_addTokens(tokens: token_usage)
-	if not tokens then
-		return
-	end
-	self.token_usage.prompt_tokens = (self.token_usage.prompt_tokens or 0) + (tokens.prompt_tokens or 0)
-	self.token_usage.completion_tokens = (self.token_usage.completion_tokens or 0) + (tokens.completion_tokens or 0)
-	self.token_usage.total_tokens = (self.token_usage.total_tokens or 0) + (tokens.total_tokens or 0)
-end
-
-function OpenAIConversation:_addMessage(message: message, metadata: metadata?)
-	metadata = metadata or {}
-	table.insert(self.messages, table.freeze(message))
-	self.message_metadata[message] = metadata
-
-	for callback in self._subscriptions do
-		task.spawn(callback, message, metadata)
-	end
-end
-
-function OpenAIConversation:AppendUserMessage(content: string): (boolean, message)
-	local message = { role = "user" :: role, content = content }
-	self:_addMessage(message)
-
-	return true, message
-end
-
-function OpenAIConversation:AppendSystemMessage(content: string): (boolean, message)
-	local message = { role = "system" :: role, content = content }
-	self:_addMessage(message)
-
-	return true, message
-end
-
-function OpenAIConversation:RequestAppendAIMessage(request_options: request_options): (boolean, string | message)
-	assert(
-		type(request_options) == "table",
-		"conversation:RequestAppendAIMessage must be called with a request_options table"
-	)
-
-	local success, response = pcall(HttpService.RequestAsync, HttpService, {
-		Url = "https://api.openai.com/v1/chat/completions",
+	local api_response: types.Result<ChatCompletionObject, types.ProviderErrors> = safeRequest({
+		Url = self._url,
 		Method = "POST",
 		Headers = {
 			["Content-Type"] = "application/json",
-			["Authorization"] = "Bearer " .. self._key,
+			["Authorization"] = "Bearer " .. self._api_key,
 		},
 		Body = HttpService:JSONEncode({
 			-- We can't support streaming with HttpService.
@@ -198,208 +165,240 @@ function OpenAIConversation:RequestAppendAIMessage(request_options: request_opti
 			-- Number of messages to generate
 			n = 1,
 			-- A list of messages comprising the conversation so far.
-			messages = self.messages,
+			messages = messages_with_system_prompt,
 			-- A list of functions the model may generate JSON inputs for.
-			tools = if #self.tools > 0 then self.tools else nil,
+			tools = self:_getToolDefinitions(),
 			-- A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse.
-			user = self.id,
+			user = self.convo_id,
 			-- ID of the model to use.
-			model = self.model,
-			-- An object specifying the format that the model must output.
-			response_format = self.response_format,
+			model = self.model_id,
 			-- What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.
-			temperature = request_options.temperature or 0.7,
+			temperature = generation_options.temperature or 0.9,
 			-- The maximum number of tokens to generate in the chat completion.
-			max_tokens = request_options.max_tokens or 200,
-			-- Number between -2.0 and 2.0. Positive values penalize new tokens based on whether they appear in the text so far, increasing the model's likelihood to talk about new topics.
-			presence_penalty = request_options.presence_penalty,
-			-- Number between -2.0 and 2.0. Positive values penalize new tokens based on their existing frequency in the text so far, decreasing the model's likelihood to repeat the same line verbatim.
-			frequency_penalty = request_options.frequency_penalty,
+			max_tokens = generation_options.max_tokens or 2048,
 			-- Up to 4 sequences where the API will stop generating further tokens.
-			stop = request_options.stop,
+			stop = generation_options.stop_sequences,
 		}),
 	})
 
-	if not success then
-		return false, "Failed to get reply from OpenAI: " .. tostring(response)
+	if not api_response.success then
+		return api_response
 	end
 
-	if response.StatusCode ~= 200 then
-		return false,
-			"OpenAI responded with error code: " .. tostring(response.StatusCode) .. " " .. tostring(
-				response.StatusMessage
-			) .. "\n" .. tostring(response.Body)
+	local chatCompletion = api_response.value
+
+	if not chatCompletion.choices or #chatCompletion.choices == 0 then
+		return {
+			success = false,
+			error = "other",
+			details = "No choices returned",
+		}
 	end
 
-	local decodeSuccess, decodeResponse = pcall(HttpService.JSONDecode, HttpService, response.Body)
-	if not decodeSuccess then
-		return false,
-			"Failed to decode OpenAI response body: " .. tostring(decodeResponse) .. "\n" .. tostring(response.Body)
+	local candidate = chatCompletion.choices[1]
+
+	if candidate.finish_reason == "content_filter" then
+		return {
+			success = false,
+			error = "safety_filter",
+			details = candidate.finish_reason,
+		}
 	end
 
-	self:_addTokens(decodeResponse.usage)
-
-	local choice = decodeResponse.choices[1]
-	local message = choice.message
-	message.content = message.content or ""
-
-	-- Add call to history
-	self:_addMessage(message, {
-		id = decodeResponse.id,
-	})
-
-	if message.tool_calls then
-		-- Handle each tool call
-		for _, tool_call in message.tool_calls do
-			if tool_call.type ~= "function" then
-				return false,
-					"AI attempted a tool call type '" .. tostring(tool_call.type) .. "', which is not supported yet."
-			end
-
-			local funcName = tool_call["function"].name
-			local func = self.tools_map[funcName]
-
-			if not func then
-				return false,
-					"AI tried to call function '" .. tostring(funcName) .. "' but no function exists by that name"
-			end
-
-			local decodeArgsSuccess, decodeArgsResponse =
-				pcall(HttpService.JSONDecode, HttpService, tool_call["function"].arguments)
-			if not decodeArgsSuccess then
-				return false,
-					"Failed to decode OpenAI function args: " .. tostring(decodeArgsResponse) .. "\n" .. tostring(
-						message.function_call.arguments
-					)
-			end
-
-			local funcSuccess, funcResponse = pcall(func, decodeArgsResponse)
-			if not funcSuccess then
-				return false,
-					"AI called function '"
-						.. tostring(funcName)
-						.. "' with args "
-						.. tostring(decodeArgsResponse)
-						.. " but it errored: "
-						.. tostring(funcResponse)
-			end
-
-			-- Add tool response to history
-			self:_addMessage({
-				tool_call_id = tool_call.id,
-				role = "tool",
-				name = funcName,
-				content = HttpService:JSONEncode(funcResponse),
-			}, {
-				id = "tool_" .. decodeResponse.id,
-			})
-		end
-
-		-- Now that the AI can read the function response, get their final message
-		return self:RequestAppendAIMessage(request_options)
+	local tool_calls = self:_getToolCalls(candidate.message)
+	if not tool_calls.success then
+		return tool_calls
 	end
 
-	return true, message
+	return {
+		success = true,
+		value = {
+			id = chatCompletion.id,
+			content = candidate.message.content or "",
+			tool_calls = tool_calls.value,
+			token_usage = {
+				input = chatCompletion.usage.prompt_tokens,
+				output = chatCompletion.usage.completion_tokens,
+			},
+		},
+	}
 end
 
-function OpenAIConversation:DoesTextViolateContentPolicy(text: string): (boolean, string | boolean, moderation_result?)
-	assert(type(text) == "string", "conversation:DoesTextViolateContentPolicy must be called with a string")
+function OpenAI:_isMessageFiltered(message: OpenAIMessage): types.Result<boolean, types.ProviderErrors>
+	local text = message.content or ""
+	if not string.find(text, "%S") then
+		-- Empty message can't be filtered
+		return {
+			success = true,
+			value = false,
+		}
+	end
 
-	local success, response = pcall(HttpService.RequestAsync, HttpService, {
+	if self._filter_cache[text] ~= nil then
+		return {
+			success = true,
+			value = self._filter_cache[text],
+		}
+	end
+
+	local api_response: types.Result<ModerationResult, types.ProviderErrors> = safeRequest({
 		Url = "https://api.openai.com/v1/moderations",
 		Method = "POST",
 		Headers = {
 			["Content-Type"] = "application/json",
-			["Authorization"] = "Bearer " .. self._key,
+			["Authorization"] = "Bearer " .. self._api_key,
 		},
 		Body = HttpService:JSONEncode({
 			input = text,
 		}),
 	})
 
-	if not success then
-		return false, "Failed to get reply from OpenAI: " .. tostring(response)
+	if not api_response.success then
+		return api_response
 	end
 
-	if response.StatusCode ~= 200 then
-		return false,
-			"OpenAI responded with error code: "
-				.. tostring(response.StatusCode)
-				.. tostring(response.StatusMessage)
-				.. "\n"
-				.. tostring(response.Body)
+	if not api_response.value.results or #api_response.value.results == 0 then
+		return {
+			success = false,
+			error = "other",
+			details = "No moderation results returned",
+		}
 	end
 
-	local decodeSuccess, decodeResponse = pcall(HttpService.JSONDecode, HttpService, response.Body)
-	if not decodeSuccess then
-		return false,
-			"Failed to decode OpenAI response body: " .. tostring(decodeResponse) .. "\n" .. tostring(response.Body)
-	end
+	local filtered = api_response.value.results[1].flagged
 
-	return true, decodeResponse.results[1].flagged, decodeResponse.results[1]
-end
+	self._filter_cache[text] = filtered
 
-function OpenAIConversation:RequestVectorEmbedding(text: string): (boolean, string | { number })
-	assert(type(text) == "string", "conversation:RequestVectorEmbedding must be called with a string")
-
-	local success, response = pcall(HttpService.RequestAsync, HttpService, {
-		Url = "https://api.openai.com/v1/embeddings",
-		Method = "POST",
-		Headers = {
-			["Content-Type"] = "application/json",
-			["Authorization"] = "Bearer " .. self._key,
-		},
-		Body = HttpService:JSONEncode({
-			model = "text-embedding-ada-002",
-			input = text,
-		}),
-	})
-
-	if not success then
-		return false, "Failed to get reply from OpenAI: " .. tostring(response)
-	end
-
-	if response.StatusCode ~= 200 then
-		return false,
-			"OpenAI responded with error code: "
-				.. tostring(response.StatusCode)
-				.. tostring(response.StatusMessage)
-				.. "\n"
-				.. tostring(response.Body)
-	end
-
-	local decodeSuccess, decodeResponse = pcall(HttpService.JSONDecode, HttpService, response.Body)
-	if not decodeSuccess then
-		return false,
-			"Failed to decode OpenAI response body: " .. tostring(decodeResponse) .. "\n" .. tostring(response.Body)
-	end
-
-	self:_addTokens(decodeResponse.usage)
-
-	return true, decodeResponse.data[1].embedding :: { number }
-end
-
-function OpenAIConversation:ClearMessages()
-	self.message_metadata = {}
-	self.messages = {
-		{ role = "system", content = self.prompt },
-	}
-	self.token_usage = {
-		prompt_tokens = 0,
-		completion_tokens = 0,
-		total_tokens = 0,
+	return {
+		success = true,
+		value = filtered,
 	}
 end
 
-function OpenAIConversation:GetMessages(): { message }
-	return table.clone(self.messages)
-end
-
-function OpenAIConversation:SubscribeToNewMessages(callback: (message: message, metadata: metadata) -> ()): () -> ()
-	self._subscriptions[callback] = true
-	return function()
-		self._subscriptions[callback] = nil
+function OpenAI:_getLastUserMessage(): OpenAIUserMessage?
+	for i = #self._formatted_messages, 1, -1 do
+		local message: OpenAIMessage = (self._formatted_messages :: any)[i]
+		if message.role == "user" then
+			return message
+		end
 	end
+	return nil
 end
 
-return OpenAIConversation
+function OpenAI._getToolCalls(
+	self: OpenAI,
+	content: OpenAIAIMessage | OpenAIAIToolCall
+): types.Result<{ types.ToolCall }?, types.ProviderErrors>
+	if not content.tool_calls then
+		return {
+			success = true,
+			value = nil,
+		}
+	end
+
+	local tool_calls = {}
+	for _, tool_call in pairs(content.tool_calls) do
+		local argsSuccess, args = pcall(HttpService.JSONDecode, HttpService, tool_call["function"].arguments)
+		if not argsSuccess then
+			return {
+				success = false,
+				error = "decode_fail",
+				details = args,
+			}
+		end
+
+		table.insert(tool_calls, {
+			tool_id = tool_call["function"].name,
+			tool_call_id = tool_call.id,
+			args = args,
+		})
+	end
+
+	if #tool_calls == 0 then
+		return {
+			success = true,
+			value = nil,
+		}
+	end
+	return {
+		success = true,
+		value = tool_calls,
+	}
+end
+
+function OpenAI._getToolDefinitions(self: OpenAI): ToolDefinitions?
+	if not next(self._tools) then
+		return nil
+	end
+
+	if not ModelConfigs[self.model_id].tool_support then
+		return nil
+	end
+
+	local tool_definitions = {}
+
+	for tool_id, tool in self._tools do
+		table.insert(tool_definitions, {
+			["type"] = "function" :: "function",
+			["function"] = {
+				name = tool.name,
+				description = tool.description,
+				parameters = tool.args,
+			},
+		})
+	end
+
+	return tool_definitions
+end
+
+function OpenAI._formatMessage(self: OpenAI, message: types.Message): OpenAIMessage
+	local formattedMessage: OpenAIMessage
+	if message.role == "user" then
+		formattedMessage = {
+			role = "user",
+			content = message.content,
+		}
+	elseif message.role == "ai" then
+		if message.tool_calls then
+			local tool_calls = {}
+			for _, tool_call in message.tool_calls do
+				table.insert(tool_calls, {
+					id = tool_call.tool_call_id,
+					type = "function",
+					["function"] = {
+						name = tool_call.tool_id,
+						arguments = HttpService:JSONEncode(tool_call.args),
+					},
+				})
+			end
+
+			formattedMessage = (
+				{
+					role = "assistant",
+					content = nil,
+					tool_calls = tool_calls,
+				} :: any
+			) :: OpenAIAIToolCall
+		else
+			formattedMessage = {
+				role = "assistant",
+				content = message.content,
+			}
+		end
+	elseif message.role == "tool" then
+		formattedMessage = {
+			role = "tool",
+			tool_call_id = message.tool_call_id,
+			name = message.tool_id,
+			content = HttpService:JSONEncode(message.content),
+		}
+	elseif message.role == "system" then
+		formattedMessage = {
+			role = "system",
+			content = message.content,
+		}
+	end
+	return formattedMessage
+end
+
+return OpenAI
