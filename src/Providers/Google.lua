@@ -7,12 +7,28 @@ local ModelConfigs = require(script.Parent.Parent.ModelConfigs)
 local types = require(script.Parent.Parent.types)
 local safeRequest = require(script.Parent.Parent.Util.safeRequest)
 
-type Part = {
-	text: string?,
+type TextPart = {
+	text: string,
+	inlineData: nil,
+	functionCall: nil,
+}
+
+type FilePart = {
+	text: nil,
 	inlineData: {
 		mimeType: string,
 		data: string,
-	}?,
+	},
+	functionCall: nil,
+}
+
+type ToolCallPart = {
+	text: nil,
+	inlineData: nil,
+	functionCall: {
+		name: string,
+		args: any,
+	},
 }
 
 type ToolPart = {
@@ -25,12 +41,7 @@ type ToolPart = {
 	},
 }
 
-type ToolCallPart = {
-	functionCall: {
-		name: string,
-		args: any,
-	},
-}
+type Part = TextPart | FilePart | ToolCallPart
 
 type GoogleUserMessage = {
 	role: "user",
@@ -42,22 +53,12 @@ type GoogleAIMessage = {
 	parts: { Part },
 }
 
-type GoogleAIToolCall = {
-	role: "model",
-	parts: { ToolCallPart },
-}
-
-type GoogleSystemMessage = {
-	role: "system",
-	parts: { Part },
-}
-
 type GoogleToolMessage = {
 	role: "function",
 	parts: { ToolPart },
 }
 
-type GoogleMessage = GoogleUserMessage | GoogleAIMessage | GoogleAIToolCall | GoogleSystemMessage | GoogleToolMessage
+type GoogleMessage = GoogleUserMessage | GoogleAIMessage | GoogleToolMessage
 
 type GoogleFunctionDeclaration = {
 	name: string,
@@ -99,7 +100,7 @@ type SafetyRating = {
 type FinishReason = "FINISH_REASON_UNSPECIFIED" | "STOP" | "MAX_TOKENS" | "SAFETY" | "RECITATION" | "OTHER"
 
 type Candidate = {
-	content: GoogleAIMessage | GoogleAIToolCall,
+	content: GoogleAIMessage,
 	finishReason: FinishReason?,
 	safetyRatings: { SafetyRating },
 	citationMetadata: {
@@ -217,8 +218,8 @@ function Google._callProvider(
 	}
 end
 
-function Google._getTextContent(self: Google, content: GoogleAIMessage | GoogleAIToolCall): string
-	local textBuffer = {}
+function Google._getTextContent(self: Google, content: GoogleAIMessage): string
+	local textBuffer: { string } = {}
 	for _, part in pairs(content.parts) do
 		if part.text then
 			table.insert(textBuffer, part.text)
@@ -227,8 +228,8 @@ function Google._getTextContent(self: Google, content: GoogleAIMessage | GoogleA
 	return table.concat(textBuffer)
 end
 
-function Google._getToolCalls(self: Google, content: GoogleAIMessage | GoogleAIToolCall): { types.ToolCall }?
-	local toolCalls = {}
+function Google._getToolCalls(self: Google, content: GoogleAIMessage): { types.ToolCall }?
+	local toolCalls: { types.ToolCall } = {}
 	for _, part in pairs(content.parts) do
 		if part.functionCall then
 			table.insert(toolCalls, {
@@ -280,8 +281,13 @@ function Google._formatMessage(self: Google, message: types.Message): GoogleMess
 			},
 		}
 	elseif message.role == "ai" then
+		local parts: { Part } = {
+			{
+				text = message.content,
+			},
+		}
+
 		if message.tool_calls then
-			local parts = {}
 			for _, tool_call in message.tool_calls do
 				table.insert(parts, {
 					functionCall = {
@@ -290,21 +296,12 @@ function Google._formatMessage(self: Google, message: types.Message): GoogleMess
 					},
 				})
 			end
-
-			formattedMessage = {
-				role = "model",
-				parts = parts,
-			}
-		else
-			formattedMessage = {
-				role = "model",
-				parts = {
-					{
-						text = message.content,
-					},
-				},
-			}
 		end
+
+		formattedMessage = {
+			role = "model",
+			parts = parts,
+		}
 	elseif message.role == "tool" then
 		formattedMessage = {
 			role = "function",
