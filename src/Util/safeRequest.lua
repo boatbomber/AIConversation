@@ -33,12 +33,28 @@ local function safeRequest<Response>(params: Params): types.Result<Response, typ
 	end
 
 	if requestResponse.StatusCode ~= 200 then
-		if decodeResponse.error and decodeResponse.error.type == "moderation_block" then
+		if requestResponse.StatusCode == 429 then
 			return {
 				success = false,
-				error = "safety_filter",
-				details = decodeResponse.error.message,
+				error = "rate_limit",
+				details = decodeResponse,
 			}
+		end
+
+		if decodeResponse.error then
+			if decodeResponse.error.type == "moderation_block" then
+				return {
+					success = false,
+					error = "safety_filter",
+					details = decodeResponse.error.message,
+				}
+			elseif decodeResponse.error.type == "tokens" then
+				return {
+					success = false,
+					error = "token_limit",
+					details = decodeResponse.error.message,
+				}
+			end
 		end
 
 		return {

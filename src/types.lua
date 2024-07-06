@@ -73,7 +73,7 @@ export type ProviderResponse = {
 }
 
 export type SafetyErrors = "safety_filter" | "text_filter"
-export type ProviderErrors = "http_err" | "decode_fail" | "other" | SafetyErrors
+export type ProviderErrors = "http_err" | "decode_fail" | "rate_limit" | "token_limit" | "other" | SafetyErrors
 export type ToolErrors = "tool_missing" | "tool_crash"
 
 type SuccessResult<T> = { success: true, value: T }
