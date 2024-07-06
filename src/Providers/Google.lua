@@ -322,10 +322,10 @@ function Google._formatMessage(self: Google, message: types.Message): GoogleMess
 		}
 	elseif message.role == "system" then
 		formattedMessage = {
-			role = "system",
+			role = "user",
 			parts = {
 				{
-					text = message.content,
+					text = "[SYSTEM_CONTEXT]" .. message.content .. "[/SYSTEM_CONTEXT]",
 				},
 			},
 		}
