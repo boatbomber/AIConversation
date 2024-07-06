@@ -1,5 +1,7 @@
 local BaseChat = require(script.Providers.BaseChat)
 
+export type Converation = BaseChat.BaseChat
+
 local Providers = {}
 for _, provider in script:FindFirstChild("Providers"):GetChildren() do
 	Providers[provider.Name] = require(provider)
