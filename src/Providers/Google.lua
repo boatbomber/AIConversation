@@ -219,6 +219,10 @@ function Google._callProvider(
 end
 
 function Google._getTextContent(self: Google, content: GoogleAIMessage): string
+	if not content or not content.parts then
+		return ""
+	end
+
 	local textBuffer: { string } = {}
 	for _, part in pairs(content.parts) do
 		if part.text then
