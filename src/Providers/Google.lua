@@ -233,6 +233,10 @@ function Google._getTextContent(self: Google, content: GoogleAIMessage): string
 end
 
 function Google._getToolCalls(self: Google, content: GoogleAIMessage): { types.ToolCall }?
+	if not content or not content.parts then
+		return nil
+	end
+
 	local toolCalls: { types.ToolCall } = {}
 	for _, part in pairs(content.parts) do
 		if part.functionCall then
