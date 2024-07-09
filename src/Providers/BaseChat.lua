@@ -11,10 +11,12 @@ type BaseChatProto = {
 	model_id: string,
 	convo_id: string,
 	filter_threshold: number,
+	context_length_limit: number,
 	_api_key: string,
 	_messages: { types.Message },
 	_message_metadata: { [types.Message]: types.MessageMetadata },
 	_formatted_messages: { types.Message },
+	_context_length: number,
 	_tools: { [string]: types.Tool },
 	_subscribers: { [(types.Message, types.MessageMetadata) -> ()]: boolean },
 	_system_prompt: string,
@@ -29,11 +31,13 @@ function BaseChat.new(): BaseChat
 	self.model_id = "base"
 	self.convo_id = "convo"
 	self.filter_threshold = 0.4
+	self.context_length_limit = 100_000
 	self._api_key = ""
 
 	self._messages = {}
 	self._message_metadata = {}
 	self._formatted_messages = {}
+	self._context_length = 0
 	self._tools = {}
 	self._subscribers = {}
 	self._system_prompt = "You are a helpful AI assistant."
@@ -153,6 +157,14 @@ function BaseChat.requestAIMessage(
 	self: BaseChat,
 	generation_options: types.GenerationOptions?
 ): types.Result<types.AIMessage, types.ProviderErrors | types.ToolErrors>
+	if self._context_length >= self.context_length_limit then
+		return {
+			success = false,
+			error = "token_limit",
+			details = "Token limit reached",
+		}
+	end
+
 	-- Call the endpoint of the provider, receiving a standardized response
 	local providerResult = self:_callProvider(generation_options or {})
 
@@ -165,6 +177,8 @@ function BaseChat.requestAIMessage(
 	-- Update the token usage info
 	self._token_usage.input += response.token_usage.input
 	self._token_usage.output += response.token_usage.output
+
+	self._context_length = response.token_usage.input + response.token_usage.output
 
 	-- Add this message to the chat
 	local message = self:_insertMessage({
