@@ -48,6 +48,13 @@ local ModelConfigs: { [string]: Config } = {
 		},
 		tool_support = true,
 	},
+	["gpt-4o-mini"] = {
+		price = {
+			input = 0.15,
+			output = 0.60,
+		},
+		tool_support = true,
+	},
 
 	-- Google models
 	["gemini-1.0-pro"] = {
