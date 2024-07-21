@@ -18,6 +18,7 @@ type BaseChatProto = {
 	_formatted_messages: { types.Message },
 	_context_length: number,
 	_tools: { [string]: types.Tool },
+	_toolMiddleware: { (tool_id: string, args: any) -> any? },
 	_subscribers: { [(types.Message, types.MessageMetadata) -> ()]: boolean },
 	_system_prompt: string,
 	_token_usage: types.TokenUsage,
@@ -39,6 +40,7 @@ function BaseChat.new(): BaseChat
 	self._formatted_messages = {}
 	self._context_length = 0
 	self._tools = {}
+	self._toolMiddleware = {}
 	self._subscribers = {}
 	self._system_prompt = "You are a helpful AI assistant."
 	self._token_usage = {
@@ -246,6 +248,19 @@ function BaseChat.addTool(
 	}
 end
 
+function BaseChat.addToolMiddleware(self: BaseChat, middlware: (tool_id: string, args: any) -> any?): () -> ()
+	assert(type(middlware) == "function", "middleware must be a function")
+
+	table.insert(self._toolMiddleware, middlware)
+
+	return function()
+		local index = table.find(self._toolMiddleware, middlware)
+		if index then
+			table.remove(self._toolMiddleware, index)
+		end
+	end
+end
+
 function BaseChat.removeTool(self: BaseChat, tool_id: string): ()
 	self._tools[tool_id] = nil
 end
@@ -258,6 +273,19 @@ function BaseChat.useTool(self: BaseChat, tool_id: string, args: any): types.Res
 			error = "tool_missing",
 			details = "Tool ID " .. tostring(tool_id) .. " not found in tools map",
 		}
+	end
+
+	for _, middlware in self._toolMiddleware do
+		local success, result = pcall(middlware, tool_id, args)
+		if not success then
+			return {
+				success = false,
+				error = "tool_crash",
+				details = tostring(result),
+			}
+		end
+
+		args = result
 	end
 
 	local success, result = pcall(tool.func, args)

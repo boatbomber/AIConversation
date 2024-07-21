@@ -12,5 +12,5 @@ With wally:
 
 ```toml
 [server-dependencies]
-AIConversation = "boatbomber/aiconversation@2.1.1"
+AIConversation = "boatbomber/aiconversation@2.2.0"
 ```
