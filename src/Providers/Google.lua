@@ -3,9 +3,9 @@
 local HttpService = game:GetService("HttpService")
 
 local BaseChat = require(script.Parent.BaseChat)
-local ModelConfigs = require(script.Parent.Parent.ModelConfigs)
 local types = require(script.Parent.Parent.types)
 local safeRequest = require(script.Parent.Parent.Util.safeRequest)
+local getModelConfig = require(script.Parent.Parent.Util.getModelConfig)
 
 type TextPart = {
 	text: string,
@@ -258,7 +258,7 @@ function Google._getToolDefinitions(self: Google): ToolDefinitions?
 		return nil
 	end
 
-	if not ModelConfigs[self.model_id].tool_support then
+	if not getModelConfig(self.model_id).tool_support then
 		return nil
 	end
 

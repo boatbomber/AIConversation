@@ -1,7 +1,7 @@
 --!strict
 
-local ModelConfigs = require(script.Parent.Parent.ModelConfigs)
 local textFilter = require(script.Parent.Parent.Util.textFilter)
+local getModelConfig = require(script.Parent.Parent.Util.getModelConfig)
 local types = require(script.Parent.Parent.types)
 
 local BaseChat = {}
@@ -68,8 +68,8 @@ function BaseChat.clearMessages(self: BaseChat): ()
 end
 
 function BaseChat.getCost(self: BaseChat): number
-	local model_config = ModelConfigs[self.model_id] or ModelConfigs["default"]
-	local model_price = model_config.price or ModelConfigs["default"].price
+	local model_config = getModelConfig(self.model_id)
+	local model_price = model_config.price or getModelConfig("default").price
 
 	local input_price = model_price.input
 	local output_price = model_price.output
