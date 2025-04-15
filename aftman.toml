@@ -1,10 +1,6 @@
-# This file lists tools managed by Aftman, a cross-platform toolchain manager.
-# For more information, see https://github.com/LPGhatguy/aftman
-
-# To add a new tool, add an entry to this table.
 [tools]
-rojo = "rojo-rbx/rojo@7.3.0"
+rojo = "rojo-rbx/rojo@7.4.4"
 run-in-roblox = "rojo-rbx/run-in-roblox@0.3.0"
 wally = "upliftgames/wally@0.3.2"
-selene = "Kampfkarren/selene@0.25.0"
-stylua = "JohnnyMorganz/stylua@0.18.2"
+selene = "Kampfkarren/selene@0.28.0"
+stylua = "JohnnyMorganz/stylua@2.0.2"
