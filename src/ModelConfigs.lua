@@ -20,27 +20,6 @@ local ModelConfigs: { [string]: Config } = {
 	},
 
 	-- OpenAI models
-	["gpt-3.5-turbo"] = {
-		price = {
-			input = 0.50,
-			output = 1.50,
-		},
-		tool_support = true,
-	},
-	["gpt-4-turbo"] = {
-		price = {
-			input = 10.00,
-			output = 30.00,
-		},
-		tool_support = true,
-	},
-	["gpt-4"] = {
-		price = {
-			input = 30.00,
-			output = 60.00,
-		},
-		tool_support = true,
-	},
 	["gpt-4o"] = {
 		price = {
 			input = 5.00,
@@ -55,15 +34,51 @@ local ModelConfigs: { [string]: Config } = {
 		},
 		tool_support = true,
 	},
-
-	-- Google models
-	["gemini-1.0-pro"] = {
+	["gpt-4.1"] = {
 		price = {
-			input = 0.50,
-			output = 1.50,
+			input = 2.00,
+			output = 8.00,
 		},
 		tool_support = true,
 	},
+	["gpt-4.1-mini"] = {
+		price = {
+			input = 0.40,
+			output = 1.60,
+		},
+		tool_support = true,
+	},
+	["gpt-4.1-nano"] = {
+		price = {
+			input = 0.10,
+			output = 0.40,
+		},
+		tool_support = true,
+	},
+	["gpt-4.5-preview"] = {
+		price = {
+			-- Not a typo, this model is just stupid expensive
+			input = 75.00,
+			output = 150.00,
+		},
+		tool_support = true,
+	},
+	["o1"] = {
+		price = {
+			input = 15.00,
+			output = 60.00,
+		},
+		tool_support = true,
+	},
+	["o3-mini"] = {
+		price = {
+			input = 1.10,
+			output = 4.40,
+		},
+		tool_support = true,
+	},
+
+	-- Google models
 	["gemini-1.5-pro"] = {
 		price = {
 			input = 3.50,
@@ -78,47 +93,131 @@ local ModelConfigs: { [string]: Config } = {
 		},
 		tool_support = true,
 	},
+	["gemini-2.0-flash"] = {
+		price = {
+			input = 0.10,
+			output = 0.40,
+		},
+		tool_support = true,
+	},
+	["gemini-2.0-flash-lite"] = {
+		price = {
+			input = 0.075,
+			output = 0.30,
+		},
+		tool_support = true,
+	},
+	["gemini-2.5-pro-preview-03-25"] = {
+		price = {
+			input = 1.25,
+			output = 10.00,
+		},
+		tool_support = true,
+	},
 
 	-- Together AI models
-	["Meta-Llama/Llama-Guard-7b"] = {
+	["deepseek-ai/DeepSeek-R1"] = {
+		price = {
+			input = 3.00,
+			output = 7.00,
+		},
+		tool_support = false,
+	},
+	["deepseek-ai/DeepSeek-R1-Distill-Llama-70B"] = {
+		price = {
+			input = 2.00,
+			output = 2.00,
+		},
+		tool_support = true,
+	},
+	["deepseek-ai/DeepSeek-R1-Distill-Qwen-14B"] = {
+		price = {
+			input = 1.60,
+			output = 1.60,
+		},
+		tool_support = true,
+	},
+	["deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"] = {
+		price = {
+			input = 0.18,
+			output = 0.18,
+		},
+		tool_support = true,
+	},
+	["deepseek-ai/DeepSeek-V3"] = {
+		price = {
+			input = 1.25,
+			output = 1.25,
+		},
+		tool_support = true,
+	},
+	["meta-llama/Meta-Llama-Guard-3-8B"] = {
 		price = {
 			input = 0.20,
 			output = 0.20,
 		},
 		tool_support = false,
 	},
-	["mistralai/Mistral-7B-Instruct-v0.2"] = {
+	["meta-llama/Llama-3.3-70B-Instruct-Turbo"] = {
 		price = {
-			input = 0.20,
-			output = 0.20,
+			input = 0.88,
+			output = 0.88,
+		},
+		tool_support = true,
+	},
+	["meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"] = {
+		price = {
+			input = 0.18,
+			output = 0.18,
+		},
+		tool_support = true,
+	},
+	["meta-llama/Llama-3.2-3B-Instruct-Turbo"] = {
+		price = {
+			input = 0.06,
+			output = 0.06,
+		},
+		tool_support = true,
+	},
+	["Qwen/QwQ-32B"] = {
+		price = {
+			input = 1.20,
+			output = 1.20,
+		},
+		tool_support = true,
+	},
+	["Qwen/Qwen2.5-7B-Instruct-Turbo"] = {
+		price = {
+			input = 0.30,
+			output = 0.30,
+		},
+		tool_support = true,
+	},
+	["Qwen/Qwen2.5-Coder-32B-Instruct"] = {
+		price = {
+			input = 0.80,
+			output = 0.80,
 		},
 		tool_support = false,
+	},
+	["Qwen/Qwen2.5-72B-Instruct-Turbo"] = {
+		price = {
+			input = 1.20,
+			output = 1.20,
+		},
+		tool_support = true,
+	},
+	["mistralai/Mistral-Small-24B-Instruct-2501"] = {
+		price = {
+			input = 0.80,
+			output = 0.80,
+		},
+		tool_support = true,
 	},
 	["mistralai/Mistral-7B-Instruct-v0.3"] = {
 		price = {
 			input = 0.20,
 			output = 0.20,
-		},
-		tool_support = false,
-	},
-	["meta-llama/Llama-3-8b-chat-hf"] = {
-		price = {
-			input = 0.20,
-			output = 0.20,
-		},
-		tool_support = false,
-	},
-	["meta-llama/Llama-3-70b-chat-hf"] = {
-		price = {
-			input = 0.90,
-			output = 0.90,
-		},
-		tool_support = false,
-	},
-	["Qwen/Qwen2-72B-Instruct"] = {
-		price = {
-			input = 0.90,
-			output = 0.90,
 		},
 		tool_support = false,
 	},
