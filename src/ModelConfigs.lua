@@ -55,14 +55,6 @@ local ModelConfigs: { [string]: Config } = {
 		},
 		tool_support = true,
 	},
-	["gpt-4.5-preview"] = {
-		price = {
-			-- Not a typo, this model is just stupid expensive
-			input = 75.00,
-			output = 150.00,
-		},
-		tool_support = true,
-	},
 	["o1"] = {
 		price = {
 			input = 15.00,
