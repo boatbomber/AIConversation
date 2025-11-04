@@ -10,6 +10,7 @@ end
 local ProviderPrefixes = {
 	["^google/"] = Providers["Google"],
 	["^openai/"] = Providers["OpenAI"],
+	["^openrouter/"] = Providers["OpenRouter"],
 }
 
 local AIConversation = {}

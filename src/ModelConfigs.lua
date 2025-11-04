@@ -213,6 +213,120 @@ local ModelConfigs: { [string]: Config } = {
 		},
 		tool_support = false,
 	},
+
+	-- OpenRouter models (pricing from OpenRouter)
+	["anthropic/claude-3.5-sonnet"] = {
+		price = {
+			input = 3.00,
+			output = 15.00,
+		},
+		tool_support = true,
+	},
+	["anthropic/claude-3-opus"] = {
+		price = {
+			input = 15.00,
+			output = 75.00,
+		},
+		tool_support = true,
+	},
+	["anthropic/claude-3-sonnet"] = {
+		price = {
+			input = 3.00,
+			output = 15.00,
+		},
+		tool_support = true,
+	},
+	["anthropic/claude-3-haiku"] = {
+		price = {
+			input = 0.25,
+			output = 1.25,
+		},
+		tool_support = true,
+	},
+	["openai/gpt-4-turbo"] = {
+		price = {
+			input = 10.00,
+			output = 30.00,
+		},
+		tool_support = true,
+	},
+	["openai/gpt-3.5-turbo"] = {
+		price = {
+			input = 0.50,
+			output = 1.50,
+		},
+		tool_support = true,
+	},
+	["google/gemini-pro-1.5"] = {
+		price = {
+			input = 2.50,
+			output = 10.00,
+		},
+		tool_support = true,
+	},
+	["google/gemini-flash-1.5"] = {
+		price = {
+			input = 0.075,
+			output = 0.30,
+		},
+		tool_support = true,
+	},
+	["meta-llama/llama-3.1-405b-instruct"] = {
+		price = {
+			input = 2.70,
+			output = 2.70,
+		},
+		tool_support = true,
+	},
+	["meta-llama/llama-3.1-70b-instruct"] = {
+		price = {
+			input = 0.52,
+			output = 0.75,
+		},
+		tool_support = true,
+	},
+	["meta-llama/llama-3.1-8b-instruct"] = {
+		price = {
+			input = 0.06,
+			output = 0.06,
+		},
+		tool_support = true,
+	},
+	["mistralai/mistral-large"] = {
+		price = {
+			input = 3.00,
+			output = 9.00,
+		},
+		tool_support = true,
+	},
+	["mistralai/mistral-medium"] = {
+		price = {
+			input = 2.70,
+			output = 8.10,
+		},
+		tool_support = true,
+	},
+	["x-ai/grok-beta"] = {
+		price = {
+			input = 5.00,
+			output = 15.00,
+		},
+		tool_support = true,
+	},
+	["deepseek/deepseek-chat"] = {
+		price = {
+			input = 0.14,
+			output = 0.28,
+		},
+		tool_support = true,
+	},
+	["perplexity/llama-3.1-sonar-large-128k-online"] = {
+		price = {
+			input = 1.00,
+			output = 1.00,
+		},
+		tool_support = true,
+	},
 }
 
 return ModelConfigs
