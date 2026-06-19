@@ -157,7 +157,7 @@ function TogetherAI._callProvider(
 			-- What sampling temperature to use, between 0 and 2. Higher values like 0.8 will make the output more random, while lower values like 0.2 will make it more focused and deterministic.
 			temperature = generation_options.temperature or 0.9,
 			-- The maximum number of tokens to generate in the chat completion.
-			max_completion_tokens = generation_options.max_tokens or 2048,
+			max_tokens = generation_options.max_tokens or 2048,
 			-- Up to 4 sequences where the API will stop generating further tokens.
 			stop = generation_options.stop_sequences,
 			-- The moderation model to guard against policy violations.
