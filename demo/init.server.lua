@@ -21,9 +21,10 @@ local tools = {
 	end,
 }
 
--- local Convo = AIConversation.new("deepseek-ai/DeepSeek-R1-Distill-Qwen-14B", Secrets.TogetherAI)
--- local Convo = AIConversation.new("openai/gpt-5-nano", Secrets.OpenAI)
-local Convo = AIConversation.new("google/gemini-3.1-flash-lite", Secrets.Google)
+-- local Convo = AIConversation.new("TogetherAI", "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B", Secrets.TogetherAI)
+-- local Convo = AIConversation.new("TogetherAI", "openai/gpt-oss-20b", Secrets.TogetherAI)
+-- local Convo = AIConversation.new("OpenAI", "gpt-5-nano", Secrets.OpenAI)
+local Convo = AIConversation.new("Google", "gemini-3.1-flash-lite", Secrets.Google)
 
 Convo:addTool("get_weather", tools["get_weather"], {
 	name = "get_weather",

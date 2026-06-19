@@ -2,27 +2,30 @@ local BaseChat = require(script.Providers.BaseChat)
 
 export type Converation = BaseChat.BaseChat
 
-local Providers = {}
-for _, provider in script:FindFirstChild("Providers"):GetChildren() do
-	Providers[provider.Name] = require(provider)
-end
-
-local ProviderPrefixes = {
-	["^google/"] = Providers["Google"],
-	["^openai/"] = Providers["OpenAI"],
+local EXCLUDED_PROVIDERS = {
+	BaseChat = true,
 }
+
+local Providers = {}
+local KnownProviders = {}
+for _, provider in script:FindFirstChild("Providers"):GetChildren() do
+	if not EXCLUDED_PROVIDERS[provider.Name] then
+		Providers[provider.Name] = require(provider)
+		table.insert(KnownProviders, provider.Name)
+	end
+end
+table.sort(KnownProviders)
+local KnownProvidersString = table.concat(KnownProviders, ", ")
 
 local AIConversation = {}
 
-function AIConversation.new(model_id, ...): BaseChat.BaseChat
-	for prefix, provider in ProviderPrefixes do
-		if string.find(model_id, prefix) then
-			model_id = string.gsub(model_id, prefix, "")
-			return provider.new(model_id, ...)
-		end
+function AIConversation.new(provider: string, model_id: string, api_key: string): BaseChat.BaseChat
+	local providerModule = Providers[provider]
+	if not providerModule then
+		error(`Unknown provider "{provider}". Valid providers: {KnownProvidersString}`)
 	end
 
-	return Providers["TogetherAI"].new(model_id, ...)
+	return providerModule.new(model_id, api_key)
 end
 
 return AIConversation
